@@ -1,0 +1,13 @@
+[Unit]
+Description=yt-pub-x3: painel na rede local, com senha, porta 8231
+
+[Service]
+WorkingDirectory=%h/projetos/yt-pub-x3
+# X3_PAINEL_SENHA e X3_PAINEL_REDES ficam fora do repositório.
+EnvironmentFile=%h/.config/yt-pub-x3/painel-rede.env
+ExecStart=/usr/bin/python3 %h/projetos/yt-pub-x3/dashboard/server.py 8231 --rede
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=default.target

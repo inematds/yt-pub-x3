@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
 """Comandos do yt-pub-x3."""
 import argparse
+import json
 import os
+import re
 import shutil
 import sys
 import tempfile
+import time
 
 sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
-from lib import VERSION, canais as canais_mod, config, cortes, db, entrada, importar  # noqa: E402
+from lib import VERSION, canais as canais_mod, config, cortes, db, entrada, importar, midia, migrar  # noqa: E402
 
 
 def canal(nome):
@@ -37,6 +40,70 @@ def enviar(a):
         sys.exit(f'recusado: {e}')
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
+
+
+def esperar_item(item, segundos):
+    """Espera o YouTube. Saída 0 com "Publicado: <url>", 4 se ainda está na fila, 5 se não vai sair."""
+    limite = time.time() + segundos
+    while True:
+        con = db.connect()
+        r = con.execute("SELECT status, url, motivo FROM entregas WHERE item_id=? AND destino='youtube'", (item,)).fetchone()
+        con.close()
+        if not r:
+            print(f'item {item} sem entrega no YouTube', file=sys.stderr); sys.exit(5)
+        if r['status'] == 'feito' and r['url']:
+            print(f"Publicado: {r['url']}"); return
+        if r['status'] not in ('aguardando', 'enviando', 'pausado'):
+            print(f"não publicado: {r['status']}: {r['motivo']}", file=sys.stderr); sys.exit(5)
+        if time.time() >= limite:
+            print(f'ainda na fila: item {item}'); sys.exit(4)
+        time.sleep(min(10, max(1, limite - time.time())))
+
+
+def esperar(a):
+    esperar_item(a.item, a.segundos)
+
+
+def enviar_arquivo(a):
+    """Para os produtores: recebe o vídeo pronto e entrega na fila do canal. O arquivo original fica intacto."""
+    c = canal(a.canal)
+    if not os.path.isfile(a.arquivo):
+        sys.exit(f'arquivo não existe: {a.arquivo}')
+    os.makedirs(config.acervo_dir(), exist_ok=True)
+    tmp = tempfile.mkdtemp(prefix='arquivo-', dir=config.acervo_dir())
+    pasta = os.path.join(tmp, re.sub(r'[^\w.-]+', '-', a.origem or os.path.basename(a.arquivo))[:50])
+    os.makedirs(pasta)
+    try:
+        destino = os.path.join(pasta, os.path.basename(a.arquivo))
+        try:
+            os.link(a.arquivo, destino)
+        except OSError:
+            shutil.copy(a.arquivo, destino)
+        if a.capa:
+            shutil.copy(a.capa, os.path.join(pasta, 'capa' + (os.path.splitext(a.capa)[1].lower() or '.jpg')))
+        contexto = '\n\n'.join([a.contexto or ''] + [open(x, encoding='utf-8').read() for x in a.contexto_arquivo]).strip()
+        post = {'tipo': 'video', 'titulo': a.titulo or '', 'descricao': a.descricao or '', 'contexto': contexto,
+                'tags': [t.strip() for t in a.tags.split(',') if t.strip()], 'sem_capa': a.sem_capa,
+                'quando': a.quando, 'origem': a.origem or 'produtor'}
+        with open(os.path.join(pasta, 'post.json'), 'w', encoding='utf-8') as f:
+            json.dump(post, f, ensure_ascii=False)
+        con = db.connect()
+        try:
+            item = entrada.enfileirar_pasta(con, c, pasta)
+            print(f'na fila: item {item} do {a.canal}')
+        except entrada.Adiar as e:
+            print(f'adiado: {e}', file=sys.stderr); sys.exit(3)
+        except entrada.Recusa as e:
+            # Nova tentativa do produtor: o vídeo já está na fila, basta voltar a esperar.
+            achado = db.ja_existe(con, a.canal, midia.sha256([a.arquivo])) if a.esperar is not None else None
+            if not achado:
+                print(f'recusado: {e}', file=sys.stderr); sys.exit(2)
+            item = achado[0]
+            print(f'já na fila: item {item} do {a.canal}')
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    if a.esperar is not None:
+        esperar_item(item, a.esperar)
 
 
 def status(_):
@@ -70,12 +137,47 @@ def imp_lives(a):
     print(f'{cortes.importar_historico(db.connect(), canal(a.canal))} lives importadas')
 
 
+def mig_clipes(a):
+    """Sem --aplicar só mostra o que iria para a fila."""
+    destino = canal(a.para)
+    todos, fora = [], {}
+    for nome in a.origem:
+        c = canal(nome)
+        lista, f = migrar.selecionar(nome, c['lives_dir'], a.clipes_pendentes, a.clipes_erro, a.imports_erro, a.imports_pendentes)
+        todos += lista
+        grupos = {}
+        for x in lista:
+            k = f"{x['grupo']} {x['situacao']}"
+            grupos[k] = grupos.get(k, 0) + 1
+        print(f'{nome}: {len(lista)} escolhidos {grupos} · fora: {dict(f)}')
+    if not a.aplicar:
+        print(f'total: {len(todos)} para {a.para} (nada foi alterado; use --aplicar)')
+        return
+    novos, rep = migrar.enfileirar(db.connect(), destino, todos)
+    print(f'{a.para}: {novos} na fila · {rep} repetidos ignorados')
+
+
 ap = argparse.ArgumentParser(prog='yt-pub-x3')
 sub = ap.add_subparsers(dest='cmd', required=True)
 p = sub.add_parser('enviar', help='põe uma pasta na fila')
 p.add_argument('pasta')
 p.add_argument('--canal', required=True)
 p.set_defaults(f=enviar)
+p = sub.add_parser('enviar-arquivo', help='produtor entrega um vídeo pronto na fila')
+p.add_argument('arquivo')
+p.add_argument('--canal', required=True)
+for op in ('titulo', 'descricao', 'contexto', 'capa', 'origem', 'tags'):
+    p.add_argument(f'--{op}', default='')
+p.add_argument('--contexto-arquivo', action='append', default=[])
+p.add_argument('--quando', default='fila', help='fila (padrão) ou AAAA-MM-DD HH:MM; "agora" vira fila')
+p.add_argument('--sem-capa', action='store_true')
+p.add_argument('--esperar', type=int, help='segundos esperando o YouTube; imprime "Publicado: <url>"')
+p.add_argument('--so-youtube', action='store_true', help='ignorado: todo vídeo vai às duas filas')
+p.set_defaults(f=enviar_arquivo)
+p = sub.add_parser('esperar', help='espera a publicação de um item no YouTube')
+p.add_argument('item', type=int)
+p.add_argument('--segundos', type=int, default=0)
+p.set_defaults(f=esperar)
 sub.add_parser('status').set_defaults(f=status)
 p = sub.add_parser('fila')
 p.add_argument('canal')
@@ -91,5 +193,14 @@ p.set_defaults(f=imp_canais)
 p = sub.add_parser('importar-lives')
 p.add_argument('canal')
 p.set_defaults(f=imp_lives)
+p = sub.add_parser('migrar-clipes', help='leva clipes de canais antigos para a fila de outro canal')
+p.add_argument('origem', nargs='+')
+p.add_argument('--para', required=True)
+p.add_argument('--clipes-pendentes', action='store_true')
+p.add_argument('--clipes-erro', action='store_true')
+p.add_argument('--imports-erro', action='store_true')
+p.add_argument('--imports-pendentes', action='store_true')
+p.add_argument('--aplicar', action='store_true')
+p.set_defaults(f=mig_clipes)
 a = ap.parse_args()
 a.f(a)

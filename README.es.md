@@ -50,7 +50,7 @@ python3 dashboard/server.py 8230               # http://127.0.0.1:8230
 
 **Las portadas y los textos con IA** usan el `yt-pubx` local (`scripts/ia_ytpubx.py`). Si no está disponible, indica los textos en `post.json` y coloca `capa.jpg` en la carpeta. Las notificaciones usan `avisa-v3.sh` en la computadora de INEMA; en otra, aparecen en el registro y el panel.
 
-**Servicios** de ejemplo en `systemd/`. No activan la publicación real.
+**Servicios** de ejemplo en `systemd/`. No activan la publicación real. Para llevar clips de instancias antiguas a otro canal: `./yt-pub-x3 migrar-clipes lives3 --para lives23 --clipes-pendentes --clipes-erro --imports-erro` muestra la vista previa, y `--aplicar` los pone en la cola.
 
 ## El proceso, de principio a fin
 
@@ -85,12 +85,11 @@ entrada/lives4/2026-11-18-enxame/
   "descricao": "Descrição no YouTube",
   "texto_rs": "Texto das redes",
   "tags": ["ia"],
-  "destinos": ["youtube", "rs"],
   "quando": "fila"
 }
 ```
 
-`tipo`: `video`, `foto` o `carrossel`. `quando`: `fila`, `agora` o `AAAA-MM-DD HH:MM`. Si faltan los textos, indica `contexto` y Codex los redactará. Las fotos y los carruseles van solo a las redes y no consumen un horario de YouTube.
+`tipo`: `video`, `foto` o `carrossel`. `quando`: `fila` (predeterminado) o `AAAA-MM-DD HH:MM`; `agora` está desactivado y pasa a `fila` (sale en el próximo horario del canal). Si faltan los textos, indica `contexto` y Codex los redactará. Las fotos y los carruseles van solo a las redes y no consumen un horario de YouTube.
 
 ## Qué ocurre cuando algo falla
 
@@ -100,7 +99,7 @@ entrada/lives4/2026-11-18-enxame/
 | Límite o cuota de YouTube | Igual, con una pausa de 6 h |
 | Falla temporal de una red | Hasta 3 intentos; después, error |
 | Interrupción durante la carga | Pasa a **Revisar**; nunca se vuelve a enviar automáticamente |
-| Video 16:9 o demasiado largo para las redes | Las redes quedan como **Omitido** |
+| Video 16:9 de 3 min o más, o vertical demasiado largo | Las redes quedan como **Omitido** |
 | Archivo repetido o carpeta no válida | **Rechazado**, con el motivo, en `data/recusados/` |
 | Codex no creó la portada | El video se publica sin portada y el panel la marca como pendiente |
 
@@ -112,6 +111,6 @@ python3 -m unittest tests/test_x3.py
 
 ## Seguridad
 
-El panel solo escucha en `127.0.0.1`, no tiene una contraseña predeterminada ni una ruta para ejecutar comandos, y las acciones requieren un encabezado propio. Los inicios de sesión, `canais/*.yaml`, `data/` y `entrada/` quedan fuera de git.
+El panel escucha en `127.0.0.1`, no tiene una contraseña predeterminada ni una ruta para ejecutar comandos, y las acciones requieren un encabezado propio. El acceso por la red local es opcional: `dashboard/server.py 8231 --rede` (servicio `yt-pub-x3-painel-rede`) exige el usuario `x3`, una `X3_PAINEL_SENHA` de al menos 16 caracteres y `X3_PAINEL_REDES` solo con redes privadas. La conexión es HTTP sin cifrar: úsala solo en una red de confianza. Los inicios de sesión, `canais/*.yaml`, `data/` y `entrada/` quedan fuera de git.
 
 Conectores: Metricool para video e imágenes. Blotato y Upload-Post todavía no tienen un conector activo.

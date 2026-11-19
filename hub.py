@@ -10,7 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from lib import VERSION, canais as canais_mod, config, db, runner  # noqa: E402
+from lib import VERSION, canais as canais_mod, config, db, runner, vigia  # noqa: E402
 
 INTERVALO = int(os.environ.get('X3_INTERVALO', '30'))
 TAMANHOS = {'youtube': 2, 'rs': 3, 'cortes': 1, 'geral': 2}
@@ -33,24 +33,39 @@ def _slots(con, nome, tipo, horarios, payload, prefixo):
             db.add_job(con, nome, tipo, quando.strftime('%Y-%m-%d %H:%M:%S'), json.dumps(payload), f'{prefixo}:{nome}:{agora:%Y-%m-%d} {hm}')
 
 
+def _limpar_slots(con, nome, prefixo, horarios):
+    """Horário desligado no painel não pode continuar agendado."""
+    marcas = ','.join('?' * len(horarios))
+    con.execute(f"""DELETE FROM jobs WHERE canal=? AND status='pendente' AND tipo IN ('publicar','cortar')
+        AND chave LIKE ? AND substr(chave,-5) NOT IN ({marcas})""", (nome, f'{prefixo}:{nome}:%', *horarios))
+
+
 def agendar(con, canais, simular=False):
     agora = datetime.now()
     for nome, c in canais.items():
         if not c['ativo']:
             continue
         db.add_job(con, nome, 'entrada', db.agora(), chave=f'entrada:{nome}:{agora:%Y-%m-%d %H:%M}')
+        _limpar_slots(con, nome, 'yt', c['youtube']['horarios'])
+        _limpar_slots(con, nome, 'clip', c['clipes']['horarios'])
+        _limpar_slots(con, nome, 'rs', c['rs']['horarios'] if c['rs']['provedor'] else [])
+        _limpar_slots(con, nome, 'corte', c['cortes']['horarios'] if c['cortes']['ligado'] else [])
         _slots(con, nome, 'publicar', c['youtube']['horarios'], {'destino': 'youtube'}, 'yt')
+        _slots(con, nome, 'publicar', c['clipes']['horarios'], {'destino': 'youtube', 'grupo': 'clipes'}, 'clip')
         if c['rs']['provedor']:
             _slots(con, nome, 'publicar', c['rs']['horarios'], {'destino': 'rs'}, 'rs')
         if c['cortes']['ligado'] and c['cortes']['horarios']:
             db.add_job(con, nome, 'sync_lives', db.agora(), chave=f'sync:{nome}:{agora:%Y-%m-%d}')
             _slots(con, nome, 'cortar', c['cortes']['horarios'], {}, 'corte')
+        if any(vigia.estado(con, nome, d)['ligado'] for d in ('youtube', 'rs')):
+            q = agora.minute // vigia.INTERVALO_MIN * vigia.INTERVALO_MIN
+            db.add_job(con, nome, 'vigiar', db.agora(), chave=f'vigiar:{nome}:{agora:%Y-%m-%d %H}:{q:02d}')
         for e in ([] if simular else db.vencidas(con, nome)):
             if not runner.disponivel(con, c, e['destino'])[0]:
                 continue  # destino pausado: a entrega espera, sem gastar job
             db.add_job(con, nome, 'publicar_entrega', db.agora(), json.dumps({'entrega_id': e['id'], 'destino': e['destino']}),
                        f"ent:{e['id']}:{e['tentativas']}:{e['atualizado_em']}")
-    con.execute("DELETE FROM jobs WHERE tipo='entrada' AND status='ok' AND fim_em < datetime('now','localtime','-1 day')")
+    con.execute("DELETE FROM jobs WHERE tipo IN ('entrada','vigiar') AND status='ok' AND fim_em < datetime('now','localtime','-1 day')")
 
 
 def _rodar(job_id, canais, simular):

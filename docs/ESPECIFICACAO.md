@@ -24,11 +24,11 @@ Por que existe: em 17/11, 26 Shorts agendados dos lives não foram ao Metricool.
 
 `entrada/<canal>/<pasta-da-publicacao>/`: `video.mp4` (ou `foto.jpg`, ou `01.jpg`, `02.jpg`…), `post.json`, `capa.jpg` (opcional, vídeo normal), `legenda.srt` (opcional), e `pronto` (vazio, criado por último). Também `yt-pub-x3 enviar <pasta> --canal livesN`. `yt-pubx publicar` passará a depositar aqui, canal por canal, no piloto.
 
-`post.json`: `tipo` (video|foto|carrossel), `titulo`, `descricao`, `texto_rs`, `tags`, `destinos` (["youtube","rs"]), `quando` (fila|agora|"AAAA-MM-DD HH:MM"), `contexto` (Codex escreve o que faltar).
+`post.json`: `tipo` (video|foto|carrossel), `titulo`, `descricao`, `texto_rs`, `tags`, `quando` (fila|"AAAA-MM-DD HH:MM"; agora vira fila desde 19/11/2026), `contexto` (Codex escreve o que faltar).
 
 Mínimo: arquivo + `tipo`; vídeo com `titulo`+`descricao` ou `contexto`; foto/carrossel com `texto_rs` ou `contexto`.
 
-Automático: foto/carrossel só RS, sem gastar horário do YouTube; links saem do texto RS; 16:9 ou longo demais = RS "ignorado"; arquivo repetido recusado (sha256, conferindo também `~/.local/share/yt-pubx/historico.jsonl`); pasta inválida = "Recusado" com motivo.
+Automático: foto/carrossel só RS, sem gastar horário do YouTube; links saem do texto RS; 16:9 com 3 min ou mais, ou vertical longo demais = RS "ignorado"; arquivo repetido recusado (sha256, conferindo também `~/.local/share/yt-pubx/historico.jsonl`); pasta inválida = "Recusado" com motivo.
 
 ## Núcleo
 
@@ -36,7 +36,7 @@ Partir de `~/projetos/yt-pub-livesx2` (`hub.py`, `lib/db.py`, `runner.py`, `cana
 
 1. Falha de OAuth ou 403 (`uploadLimitExceeded`, `quotaExceeded`) consumindo vídeo. Pausa o YouTube daquele canal com `retomar_em` (auth ~1 h, cota ~6 h); o vídeo fica aguardando, sem contar tentativa.
 2. `release_stuck_jobs` recolocando `publicando` na fila (pode duplicar upload). Ao iniciar o hub, `enviando` vira **conferir**, sem reenvio automático.
-3. Tick serial. YouTube, RS e cortes rodam em trabalhadores separados; o Metricool pode esperar até 1 h pela trava da marca.
+3. Tick serial. YouTube, RS e cortes rodam em trabalhadores separados; o Metricool pode esperar a vez de outro envio da mesma marca.
 
 Tabelas: `itens` (canal, tipo, arquivos, textos, sha256, origem, quando; único por canal+sha256), `entregas` (item, destino, status aguardando|pausado|enviando|feito|erro|ignorado|conferir, tentativas, erro, ref, url), `canal_destino` (ligado, pausa, motivo, retomar_em), `lives`, `jobs` (chave única).
 
@@ -48,7 +48,7 @@ Marcas: lives3/31 FTD 7908265 · lives4/12 inema.tds 7797870 · lives7/8 VIBE 80
 
 ## Conectores
 
-- **Metricool, vídeo:** subprocesso de `~/projetos/metricool-inematds/publicar.sh <video> <legenda> inematds/yt-pubx` com `MARCA`, `REDES` (como `yt-pubx/hooks/metricool.py`). Mantém trava por marca, 1 h, `sem_links`, recibo. Reusar o mesmo arquivo de legenda na repetição (o recibo depende dele). Saída 0 = feito; 2 = formato/ignorado; 1 = tentar de novo. Conferir antes: vertical, ≤180 s com Instagram, ≤600 s só TikTok.
+- **Metricool, vídeo:** subprocesso de `~/projetos/metricool-inematds/publicar.sh <video> <legenda> inematds/yt-pubx` com `MARCA`, `REDES` (como `yt-pubx/hooks/metricool.py`). Mantém fila por marca, `sem_links` e recibo. A trava de 1 h fica desligada nos envios do x3 (`INTERVALO_LIVRE=1`, Nei, 18/11/2026): o intervalo é gerido pelos horários do x3, e o painel mostra as sobreposições na aba Marcas. Reusar o mesmo arquivo de legenda na repetição (o recibo depende dele). Saída 0 = feito; 2 = formato/ignorado; 1 = tentar de novo. Conferir antes: vertical, ≤180 s com Instagram, ≤600 s só TikTok.
 - **Metricool, foto/carrossel:** `publicar.sh` só aceita vídeo. Base: `~/projetos/carrossel-inema/scripts/publicar.sh` (release pública + `createScheduledPost`, `instagramData.type=POST`), mas ele exige `01-capa.png`, publica rascunho sem `AO_VIVO=1` e usa `claude -p`; adaptar sem mudar o original.
 - **Blotato e Upload-Post:** só desenho/desligados. **Não chamar sem autorização e chave.**
 
@@ -62,7 +62,7 @@ Reaproveitar a lógica de `gerar_metadados` e `arte_codex`/`gerar_thumb` do `~/p
 
 ## Painel
 
-`dashboard/`, porta própria só em 127.0.0.1, **sem senha padrão, sem rota de execução ou reinício**. Dados de x3 + leitura somente-leitura de `yt-pub-livesN/data/lives.db`, `historico.jsonl` do yt-pubx e recibos em `metricool-inematds/estado`. Ações por entrega: pausar, retomar, pular, reenviar; por canal: ligar/desligar cada destino. POST exige cabeçalho próprio.
+`dashboard/`, porta própria em 127.0.0.1, **sem senha padrão, sem rota de execução ou reinício**. Rede local (pedido do Nei, 18/11/2026): porta separada 8231 com `--rede`, senha gerada na instalação e só redes privadas listadas; a porta 8230 continua só em 127.0.0.1. Dados de x3 + leitura somente-leitura de `yt-pub-livesN/data/lives.db`, `historico.jsonl` do yt-pubx e recibos em `metricool-inematds/estado`. Ações por entrega: pausar, retomar, pular, reenviar; por canal: ligar/desligar cada destino. POST exige cabeçalho próprio.
 
 ## Testes = critério de pronto (só publicadores falsos e pastas temporárias)
 

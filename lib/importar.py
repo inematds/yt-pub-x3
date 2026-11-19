@@ -20,8 +20,8 @@ M = {
 MARCA = {'lives2': 'Radar', 'lives3': 'FTD', 'lives4': 'inema.tds', 'lives7': 'VIBE', 'lives8': 'VIBE', 'lives10': 'eventosextremos',
          'lives11': 'inemafuturos', 'lives12': 'inema.tds', 'lives24': 'Radar', 'lives31': 'FTD'}
 RS_LIGADO = {'lives3', 'lives4', 'lives7', 'lives8', 'lives12', 'lives31'}
-NOTAS = {'lives1': 'Saiu do Metricool em 17/11/2026.', 'lives2': 'O Radar Viral tem fluxo próprio.', 'lives24': 'O Radar Viral tem fluxo próprio.',
-         'lives10': 'O clima tem fluxo próprio.', 'lives11': 'Outra conta do Metricool (metricool-pub2).'}
+NOTAS = {'lives1': 'Saiu do Metricool em 17/11/2026.', 'lives2': 'Radar Viral entra pela fila do x3.', 'lives24': 'Radar Viral entra pela fila do x3.',
+         'lives10': 'Clima entra pela fila do x3.', 'lives11': 'Outra conta do Metricool (metricool-pub2).'}
 
 
 def _ytpubx():

@@ -26,7 +26,7 @@ class Adiar(Exception):
 def _quando(v):
     v = str(v or 'fila').strip()
     if v in ('fila', 'agora'):
-        return v
+        return 'fila'  # Nei, 19/11/2026: nada fura a fila; "agora" sai no próximo horário do canal
     try:
         return datetime.strptime(v, '%Y-%m-%d %H:%M').strftime('%Y-%m-%d %H:%M')
     except ValueError:
@@ -89,7 +89,9 @@ def criar_entregas(con, item_id, canal, pede):
         db.add_entrega(con, item_id, nome, 'youtube')
     if 'rs' in pede:
         rs = canal['rs']
-        motivo = 'Canal sem RS' if not rs['provedor'] else (metricool.formato(it, rs) if rs['provedor'] == 'metricool' else '')
+        motivo = 'Canal sem RS' if not rs['provedor'] else (metricool.formato(it, rs) if rs['provedor'] in metricool.PUBLICADORES else '')
+        if rs['so_imagens'] and it['tipo'] in ('video', 'clip'):
+            motivo = 'Nas redes este canal só publica foto e carrossel'
         db.add_entrega(con, item_id, nome, 'rs', 'ignorado' if motivo else 'aguardando', motivo)
 
 
@@ -128,9 +130,8 @@ def enfileirar_pasta(con, canal, origem, escrever=None, simular=False):
     else:
         raise Recusa('tipo deve ser video, foto ou carrossel')
     quando = _quando(p.get('quando'))
-    pede = p.get('destinos') or (['youtube', 'rs'] if tipo == 'video' else ['rs'])
-    if not isinstance(pede, list) or not pede or any(d not in ('youtube', 'rs') for d in pede):
-        raise Recusa('destinos deve ter youtube e/ou rs')
+    # Regra única (Nei, 18/11/2026): todo vídeo que entra vai para as duas filas, imports e redes.
+    pede = ['youtube', 'rs'] if tipo == 'video' else ['rs']
     privacy = p.get('privacy') or canal['youtube']['privacy']
     if privacy not in ('public', 'unlisted', 'private'):
         raise Recusa('privacy inválido')
@@ -182,7 +183,7 @@ def enfileirar_pasta(con, canal, origem, escrever=None, simular=False):
     try:
         item_id = db.add_item(con, canal=nome, tipo=tipo, pasta=destino, arquivos=json.dumps(arquivos), titulo=titulo,
                               descricao=descricao, texto_rs=texto, tags=str(tags), privacy=privacy, capa=capa,
-                              capa_status=capa_inicial(tipo, capa, l, a, d), legenda=leg if tem_leg else '',
+                              capa_status='nao_leva' if p.get('sem_capa') else capa_inicial(tipo, capa, l, a, d), legenda=leg if tem_leg else '',
                               sha256=sha, origem=str(p.get('origem') or 'entrada'), quando=quando,
                               largura=l, altura=a, duracao=d)
         criar_entregas(con, item_id, canal, list(dict.fromkeys(pede)))

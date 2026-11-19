@@ -38,12 +38,15 @@ def _http(req, timeout=60, rede=TEMPORARIO, apos_envio=False):
         raise Falha(f'rede: {e}', rede) from None
 
 
-def metadados(titulo, descricao, tags='', privacy='public', categoria='27', idioma='pt'):
+def metadados(titulo, descricao, tags='', privacy='public', categoria='27', idioma='pt', rotulo_ia=False):
     if isinstance(tags, str):
         tags = [t.strip() for t in tags.split(',') if t.strip()]
-    return {'snippet': {'title': titulo[:100], 'description': descricao[:5000], 'tags': tags[:30], 'categoryId': categoria,
+    status = {'privacyStatus': privacy, 'selfDeclaredMadeForKids': False}
+    if rotulo_ia:
+        status['containsSyntheticMedia'] = True
+    return {'snippet': {'title': titulo[:100], 'description': descricao[:5000], 'tags': tags[:30], 'categoryId': str(categoria),
                         'defaultLanguage': idioma, 'defaultAudioLanguage': idioma},
-            'status': {'privacyStatus': privacy, 'selfDeclaredMadeForKids': False}}
+            'status': status}
 
 
 def _token(config_dir):
@@ -56,7 +59,7 @@ def _token(config_dir):
         raise Falha(f'login: {e}', AUTH) from None
 
 
-def publicar(arquivo, titulo, descricao, config_dir, tags='', privacy='public', log=print):
+def publicar(arquivo, titulo, descricao, config_dir, tags='', privacy='public', log=print, categoria='27', idioma='pt', rotulo_ia=False):
     if not os.path.isfile(arquivo) or not os.path.getsize(arquivo):
         raise Falha(f'arquivo ausente ou vazio: {arquivo}', DEFINITIVO)
     if not titulo.strip():
@@ -65,7 +68,7 @@ def publicar(arquivo, titulo, descricao, config_dir, tags='', privacy='public', 
     tamanho = os.path.getsize(arquivo)
     chave = creds.api_key(config_dir)
     url = f'{UPLOAD}/videos?uploadType=resumable&part=snippet,status' + (f'&key={chave}' if chave else '')
-    req = urllib.request.Request(url, data=json.dumps(metadados(titulo, descricao, tags, privacy)).encode(), method='POST',
+    req = urllib.request.Request(url, data=json.dumps(metadados(titulo, descricao, tags, privacy, categoria, idioma, rotulo_ia)).encode(), method='POST',
                                  headers={'Authorization': f'Bearer {token}', 'Content-Type': 'application/json; charset=UTF-8',
                                           'X-Upload-Content-Length': str(tamanho), 'X-Upload-Content-Type': 'video/*'})
     cab, _ = _http(req)
@@ -82,6 +85,17 @@ def publicar(arquivo, titulo, descricao, config_dir, tags='', privacy='public', 
     if not vid:
         raise Falha(f'resposta sem id: {corpo[:200]!r}', AMBIGUO)
     return vid, f'https://www.youtube.com/watch?v={vid}'
+
+
+def visualizacoes(ids, config_dir):
+    """Views públicas de até 50 vídeos numa chamada (1 unidade de cota). Vídeo que sumiu não volta no dicionário."""
+    ids = [i for i in ids if i][:50]
+    if not ids:
+        return {}
+    req = urllib.request.Request(f"{API}/videos?part=statistics&id={','.join(ids)}",
+                                 headers={'Authorization': f'Bearer {_token(config_dir)}'})
+    _, corpo = _http(req)
+    return {v['id']: int(v.get('statistics', {}).get('viewCount') or 0) for v in json.loads(corpo).get('items', [])}
 
 
 def definir_capa(video_id, capa, config_dir):

@@ -50,7 +50,7 @@ python3 dashboard/server.py 8230               # http://127.0.0.1:8230
 
 **Capa e textos por IA** usam o `yt-pubx` local (`scripts/ia_ytpubx.py`). Sem ele, informe os textos no `post.json` e coloque `capa.jpg` na pasta. Os avisos usam `avisa-v3.sh` na máquina INEMA; em outra, ficam no log e no painel.
 
-**Serviços** de exemplo em `systemd/`. Eles não ligam a publicação real.
+**Serviços** de exemplo em `systemd/`. Eles não ligam a publicação real. Para levar clipes de instâncias antigas a outro canal: `./yt-pub-x3 migrar-clipes lives3 --para lives23 --clipes-pendentes --clipes-erro --imports-erro` mostra a prévia, e `--aplicar` põe na fila.
 
 ## O processo, do início ao fim
 
@@ -66,6 +66,7 @@ python3 dashboard/server.py 8230               # http://127.0.0.1:8230
 | 8 | Publicar 1 item por horário, separado por destino | automático | ⚙️ hub |
 | 9 | Aplicar capa pelo Codex quando permitido | automático | ⚙️ hub · 🤖 Codex |
 | 10 | Acompanhar, pausar, pular ou reenviar | `http://127.0.0.1:8230` | 🧠 Nei |
+| 11 | Alerta de shadowban: ativar por canal e destino, ver as leituras e destravar | painel do canal → linha **Alerta de shadowban** e aba de mesmo nome | 🧠 Nei · ⚙️ hub |
 
 ## O que colocar na pasta
 
@@ -85,12 +86,11 @@ entrada/lives4/2026-11-18-enxame/
   "descricao": "Descrição no YouTube",
   "texto_rs": "Texto das redes",
   "tags": ["ia"],
-  "destinos": ["youtube", "rs"],
   "quando": "fila"
 }
 ```
 
-`tipo`: `video`, `foto` ou `carrossel`. `quando`: `fila`, `agora` ou `AAAA-MM-DD HH:MM`. Sem os textos, informe `contexto` e o Codex escreve. Foto e carrossel vão só às redes e não gastam horário do YouTube.
+`tipo`: `video`, `foto` ou `carrossel`. `quando`: `fila` (padrão) ou `AAAA-MM-DD HH:MM`; `agora` foi desligado e vira `fila` (sai no próximo horário do canal). Sem os textos, informe `contexto` e o Codex escreve. Foto e carrossel vão só às redes e não gastam horário do YouTube.
 
 ## O que acontece quando algo falha
 
@@ -100,9 +100,18 @@ entrada/lives4/2026-11-18-enxame/
 | Limite ou cota do YouTube | Igual, com pausa de 6 h |
 | Rede temporária | Até 3 tentativas, depois erro |
 | Queda durante o upload | Vai para **Conferir**; nunca reenvia sozinho |
-| Vídeo 16:9 ou longo demais para as redes | Redes ficam como **Ignorado** |
+| Vídeo 16:9 com 3 min ou mais, ou vertical longo demais | Redes ficam como **Ignorado** |
 | Arquivo repetido ou pasta inválida | **Recusado**, com o motivo, em `data/recusados/` |
 | Codex não fez a capa | Vídeo sai sem capa e o painel marca pendente |
+| Post com poucas views (alerta de shadowban ativo) | Aviso no v3. Com N posts baixos seguidos o destino fica **Travado**; só para de publicar se a pausa automática estiver ligada; destravar é manual no painel |
+
+### Alerta de shadowban
+
+Desativado em todo canal. Ativo, confere só o que foi publicado depois de ativar:
+- **YouTube:** lê as views pela YouTube Data API (`videos.list`, 1 unidade por até 50 vídeos) depois de `espera_yt` minutos (padrão 60) e de novo com 24 h, para a análise.
+- **RS:** não faz leitura nova; usa a foto diária do Metricool gravada pelo `verdade-das-redes` depois de `espera_rs` horas (padrão 24). Hoje cobre as marcas inema.tds, eventosextremos e FTD.
+- Abaixo do limite (padrão 20 views) = aviso. `seguidos` posts baixos (padrão 2) = **Travado**. A pausa automática começa desligada.
+- A aba mostra mediana, quantos posts dariam alerta com o limite atual e cada leitura, para calibrar o limite de cada canal.
 
 ## Testes
 
@@ -112,6 +121,6 @@ python3 -m unittest tests/test_x3.py
 
 ## Segurança
 
-O painel só escuta em `127.0.0.1`, não tem senha padrão nem rota que execute comandos, e ações exigem um cabeçalho próprio. Logins, `canais/*.yaml`, `data/` e `entrada/` ficam fora do git.
+O painel escuta em `127.0.0.1`, não tem senha padrão nem rota que execute comandos, e ações exigem um cabeçalho próprio. O acesso pela rede local é opcional: `dashboard/server.py 8231 --rede` (serviço `yt-pub-x3-painel-rede`) exige usuário `x3`, `X3_PAINEL_SENHA` com 16 caracteres ou mais e `X3_PAINEL_REDES` só com redes privadas. A conexão é HTTP, sem criptografia: use apenas em rede de confiança. Logins, `canais/*.yaml`, `data/` e `entrada/` ficam fora do git.
 
 Conectores: Metricool para vídeo e imagem. Blotato e Upload-Post ainda não têm conector ativo.

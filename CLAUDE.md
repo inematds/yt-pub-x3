@@ -15,4 +15,7 @@ Quando for corrigido ou notar um erro seu, antes de continuar acrescente a liç�
 
 ## Lessons
 
+- Painel: cortes de lives estão desligados nos canais; não montar caixa "Clips" com eles. Usar a publicação de clipes (`clipes.horarios`); leitura ainda a confirmar com o Nei. (18/11/2026)
+- Pendência nos `yt-pub-livesN`: `publicados.filename` pode ser clip_id ou nome do arquivo. Conferir os dois, o título e `clips_pendentes` antes de enfileirar. (18/11/2026)
+- `lives/` dos `yt-pub-livesN` é link para `/mnt/hd8t`: procurar arquivos com `find -L`, senão a contagem sai zero. (18/11/2026)
 - Histórico importado não pode contar no limite diário de cortes: importar sem data de atualização. (18/11/2026)

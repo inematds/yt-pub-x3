@@ -9,11 +9,12 @@ from . import config
 
 BASE = {
     'destino_id': '', 'destino_nome': '', 'url': '', 'origem_id': '', 'config_dir': '', 'lives_dir': '',
-    'ativo': False, 'max_tentativas': 3,
+    'ativo': False, 'max_tentativas': 3, 'migrado_em': '', 'manter_erros_e_pendentes': False,
 }
-YOUTUBE = {'ligado': True, 'horarios': [], 'privacy': 'public'}
+YOUTUBE = {'ligado': True, 'horarios': [], 'privacy': 'public', 'categoria': '27', 'idioma': 'pt', 'rotulo_ia': False}
 RS = {'provedor': '', 'ligado': False, 'marca': '', 'blog_id': '', 'redes': [], 'instagram': '', 'tiktok': '',
-      'horarios': None, 'nota': ''}
+      'horarios': None, 'nota': '', 'so_imagens': False}
+CLIPES = {'horarios': []}
 CORTES = {'ligado': False, 'horarios': [], 'max_por_dia': 1, 'ai_modo': 'claude-api'}
 
 
@@ -29,13 +30,41 @@ def normaliza(nome, bruto):
     c['youtube'] = {**YOUTUBE, **(bruto.get('youtube') or {})}
     c['rs'] = {**RS, **(bruto.get('rs') or {})}
     c['cortes'] = {**CORTES, **(bruto.get('cortes') or {})}
+    c['clipes'] = {**CLIPES, **(bruto.get('clipes') or {})}
+    c['clipes']['horarios'] = _lista(c['clipes']['horarios'])
     c['youtube']['horarios'] = _lista(c['youtube']['horarios'])
     c['cortes']['horarios'] = _lista(c['cortes']['horarios'])
     c['rs']['redes'] = _lista(c['rs']['redes'])
-    c['rs']['horarios'] = c['youtube']['horarios'] if c['rs']['horarios'] is None else _lista(c['rs']['horarios'])
+    c['rs_herda'] = c['rs']['horarios'] is None  # sem lista própria, o RS acompanha os horários de imports
+    c['rs']['horarios'] = c['youtube']['horarios'] if c['rs_herda'] else _lista(c['rs']['horarios'])
+    c['migrado_em'] = str(c['migrado_em'] or '')[:16]
     c['config_dir'] = os.path.expanduser(str(c['config_dir'] or ''))
     c['lives_dir'] = os.path.expanduser(str(c['lives_dir'] or ''))
     return c
+
+
+def validar_horarios(valor):
+    if not isinstance(valor, list) or len(valor) > 48:
+        raise ValueError('lista de horários inválida')
+    if not all(isinstance(h, str) and re.fullmatch(r'([01]\d|2[0-3]):[0-5]\d', h) for h in valor):
+        raise ValueError('use horários no formato HH:MM')
+    return sorted(set(valor))
+
+
+def definir_horarios(nome, secao, horarios, dir_=None):
+    """Troca só os horários de uma seção, sem reescrever o resto do arquivo do canal."""
+    if secao not in ('youtube', 'clipes', 'rs', 'cortes'):
+        raise ValueError('seção inválida')
+    horarios = validar_horarios(horarios)
+    p = os.path.join(dir_ or config.canais_dir(), nome + '.yaml')
+    with open(p, encoding='utf-8') as f:
+        dados = yaml.safe_load(f) or {}
+    dados.setdefault(secao, {})['horarios'] = horarios
+    tmp = f'{p}.{os.getpid()}.tmp'
+    with open(tmp, 'w', encoding='utf-8') as f:
+        yaml.safe_dump(dados, f, allow_unicode=True, sort_keys=False)
+    os.replace(tmp, p)
+    return horarios
 
 
 def carregar(dir_=None):
@@ -56,7 +85,7 @@ def salvar(c, dir_=None, sobrescrever=False):
     p = os.path.join(dir_, c['nome'] + '.yaml')
     if os.path.exists(p) and not sobrescrever:
         return None
-    dados = {k: v for k, v in c.items() if k != 'nome'}
+    dados = {k: v for k, v in c.items() if k not in ('nome', 'rs_herda')}
     if dados['rs']['horarios'] == dados['youtube']['horarios']:
         dados['rs'] = {k: v for k, v in dados['rs'].items() if k != 'horarios'}  # herda do YouTube
     with open(p, 'w', encoding='utf-8') as f:

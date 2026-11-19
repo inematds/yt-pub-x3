@@ -4,16 +4,18 @@ import os
 import subprocess
 from datetime import datetime, timedelta
 
-from . import config, cortes, db, entrada, ia, metricool, youtube
+from . import config, cortes, db, entrada, ia, metricool, vigia, youtube
 from .falhas import AMBIGUO, AUTH, COTA, DEFINITIVO, FORMATO, Falha
 
 PAUSA = {AUTH: timedelta(hours=1), COTA: timedelta(hours=6)}
-FAIXAS = {'publicar': None, 'publicar_entrega': None, 'entrada': 'geral', 'capa': 'geral', 'sync_lives': 'geral', 'cortar': 'cortes'}
+FAIXAS = {'publicar': None, 'publicar_entrega': None, 'entrada': 'geral', 'capa': 'geral', 'sync_lives': 'geral', 'cortar': 'cortes', 'vigiar': 'geral'}
 
 
 def pub_youtube(canal, item, log=print):
     arq = json.loads(item['arquivos'])[0]
-    return youtube.publicar(arq, item['titulo'], item['descricao'], canal['config_dir'], item['tags'], item['privacy'], log)
+    yt = canal['youtube']
+    return youtube.publicar(arq, item['titulo'], item['descricao'], canal['config_dir'], item['tags'], item['privacy'], log,
+                            categoria=yt['categoria'], idioma=yt['idioma'], rotulo_ia=yt['rotulo_ia'])
 
 
 def pub_rs(canal, item, log=print):
@@ -55,6 +57,9 @@ def disponivel(con, canal, destino):
     est = db.estado_destino(con, canal['nome'], destino)
     if est['retomar_em'] and est['retomar_em'] > db.agora():
         return False, f"pausado até {est['retomar_em'][:16]}: {est['pausa_motivo']}"
+    trava = vigia.bloqueia(con, canal['nome'], destino)
+    if trava:
+        return False, trava
     return True, ''
 
 
@@ -153,7 +158,8 @@ def executar(con, job, canais, simular, log=print):
             r = f'{entrada.varrer(con, canal, log, ESCREVER, simular)} novo(s)'
         elif t == 'publicar':
             pode, motivo = disponivel(con, canal, p['destino'])
-            e = db.proxima(con, canal['nome'], p['destino']) if pode else None
+            grupo = p.get('grupo') or ('outros' if p['destino'] == 'youtube' and canal['clipes']['horarios'] else None)
+            e = db.proxima(con, canal['nome'], p['destino'], grupo) if pode else None
             r = motivo or ('fila vazia' if not e else publicar_entrega(con, canal, e, simular, log))
         elif t == 'publicar_entrega':
             e = db.entrega(con, p['entrega_id'])
@@ -164,6 +170,8 @@ def executar(con, job, canais, simular, log=print):
                 return r
         elif t == 'capa':
             r = fazer_capa(con, canal, p['item_id'], simular, log)
+        elif t == 'vigiar':
+            r = 'simulado' if simular else vigia.conferir(con, canal, avisar, log)
         elif t == 'sync_lives':
             r = 'simulado' if simular else f'{cortes.sincronizar(con, canal, LISTAR_LIVES)} nova(s)'
         elif t == 'cortar':

@@ -50,7 +50,7 @@ python3 dashboard/server.py 8230               # http://127.0.0.1:8230
 
 **AI-generated cover images and text** use the local `yt-pubx` (`scripts/ia_ytpubx.py`). Without it, provide the text in `post.json` and put `capa.jpg` in the folder. Notifications use `avisa-v3.sh` on the INEMA computer; on another computer, they appear in the log and dashboard.
 
-**Example services** are in `systemd/`. They do not enable real publishing.
+**Example services** are in `systemd/`. They do not enable real publishing. To move clips from old instances to another channel: `./yt-pub-x3 migrar-clipes lives3 --para lives23 --clipes-pendentes --clipes-erro --imports-erro` shows a preview, and `--aplicar` adds them to the queue.
 
 ## The process, from start to finish
 
@@ -85,12 +85,11 @@ entrada/lives4/2026-11-18-enxame/
   "descricao": "Description on YouTube",
   "texto_rs": "Social media text",
   "tags": ["ia"],
-  "destinos": ["youtube", "rs"],
   "quando": "fila"
 }
 ```
 
-`tipo`: `video`, `foto`, or `carrossel`. `quando`: `fila`, `agora`, or `AAAA-MM-DD HH:MM`. If the text is missing, provide `contexto` and Codex will write it. Photos and carousels go only to social networks and do not use a YouTube time slot.
+`tipo`: `video`, `foto`, or `carrossel`. `quando`: `fila` (default) or `AAAA-MM-DD HH:MM`; `agora` is disabled and becomes `fila` (goes out at the channel's next time slot). If the text is missing, provide `contexto` and Codex will write it. Photos and carousels go only to social networks and do not use a YouTube time slot.
 
 ## What happens when something fails
 
@@ -100,7 +99,7 @@ entrada/lives4/2026-11-18-enxame/
 | YouTube limit or quota | Same, with a 6 h pause |
 | Temporary social network failure | Up to 3 attempts, then an error |
 | Failure during upload | Goes to **Review**; never resends automatically |
-| Video is 16:9 or too long for social networks | Social networks are marked **Skipped** |
+| 16:9 video of 3 min or more, or vertical video that is too long | Social networks are marked **Skipped** |
 | Duplicate file or invalid folder | **Rejected**, with the reason, in `data/recusados/` |
 | Codex did not create the cover image | Video goes out without a cover image, and the dashboard marks it as pending |
 
@@ -112,6 +111,6 @@ python3 -m unittest tests/test_x3.py
 
 ## Security
 
-The dashboard listens only on `127.0.0.1`, has no default password or route that executes commands, and actions require a dedicated header. Logins, `canais/*.yaml`, `data/` and `entrada/` stay out of git.
+The dashboard listens on `127.0.0.1`, has no default password or route that executes commands, and actions require a dedicated header. Local network access is optional: `dashboard/server.py 8231 --rede` (service `yt-pub-x3-painel-rede`) requires user `x3`, an `X3_PAINEL_SENHA` of at least 16 characters, and `X3_PAINEL_REDES` listing private networks only. The connection is unencrypted HTTP: use it only on a trusted network. Logins, `canais/*.yaml`, `data/` and `entrada/` stay out of git.
 
 Connectors: Metricool for video and images. Blotato and Upload-Post do not have active connectors yet.

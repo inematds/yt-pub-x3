@@ -58,6 +58,8 @@ def connect(path=None):
     con.execute('PRAGMA journal_mode=WAL')
     con.execute('PRAGMA busy_timeout=30000')
     con.executescript(SCHEMA)
+    from . import vigia
+    vigia.preparar(con)
     return con
 
 
@@ -84,17 +86,22 @@ def entrega(con, eid):
     return con.execute('SELECT * FROM entregas WHERE id=?', (eid,)).fetchone()
 
 
-def proxima(con, canal, destino):
-    """Próxima da fila normal. Com data ou 'agora', a entrega sai por vencidas()."""
-    return con.execute("""SELECT e.* FROM entregas e JOIN itens i ON i.id=e.item_id
-        WHERE e.canal=? AND e.destino=? AND e.status='aguardando' AND i.quando='fila'
+# Regra do Nei (18/11/2026): Short sai nos horários de imports; vídeo sai nos horários de clipes.
+E_CLIPE = "(NOT (i.largura>0 AND i.altura>0 AND i.largura<i.altura AND i.duracao<=180))"
+
+
+def proxima(con, canal, destino, grupo=None):
+    """Próxima da fila normal. `grupo`: 'clipes', 'outros' ou None para todos."""
+    filtro = {'clipes': f'AND {E_CLIPE}', 'outros': f'AND NOT {E_CLIPE}'}.get(grupo, '')
+    return con.execute(f"""SELECT e.* FROM entregas e JOIN itens i ON i.id=e.item_id
+        WHERE e.canal=? AND e.destino=? AND e.status='aguardando' AND i.quando='fila' {filtro}
         ORDER BY e.id LIMIT 1""", (canal, destino)).fetchone()
 
 
 def vencidas(con, canal):
     return con.execute("""SELECT e.* FROM entregas e JOIN itens i ON i.id=e.item_id
         WHERE e.canal=? AND e.status='aguardando' AND i.quando!='fila'
-        AND (i.quando='agora' OR i.quando<=?) ORDER BY e.id""", (canal, agora()[:16])).fetchall()
+        AND i.quando!='agora' AND i.quando<=? ORDER BY e.id""", (canal, agora()[:16])).fetchall()
 
 
 def reivindicar(con, eid):

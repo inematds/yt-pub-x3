@@ -18,7 +18,7 @@ carregador.exec_module(yp)
 
 p = json.load(sys.stdin)
 cfg = yp.load_config()
-nome, c = yp.canal(cfg, p['canal'])
+nome, c = yp.canal(cfg, {'lives25': 'espanhol', 'lives26': 'aventuras'}.get(p['canal'], p['canal']))
 modelo = cfg.get('codex_modelo', '')
 pasta = p.get('pasta') or os.getcwd()
 
