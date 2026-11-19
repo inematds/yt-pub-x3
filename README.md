@@ -113,6 +113,13 @@ Desativado em todo canal. Ativo, confere só o que foi publicado depois de ativa
 - Abaixo do limite (padrão 20 views) = aviso. `seguidos` posts baixos (padrão 2) = **Travado**. A pausa automática começa desligada.
 - A aba mostra mediana, quantos posts dariam alerta com o limite atual e cada leitura, para calibrar o limite de cada canal.
 
+### Placar por taxa
+
+Na mesma aba, cada destino ganha um placar em % das views, não em views: compartilhamentos, curtidas, comentários e salvos por post, a mediana do canal e os 5 melhores. Meta do compartilhamento: 1%.
+- **RS:** os números vêm da mesma foto do Metricool (curtidas, comentários, compartilhamentos, salvos, alcance); a ordem é por compartilhamento.
+- **YouTube:** usa a leitura de 24 h (curtidas e comentários). Compartilhamentos não vêm na YouTube Data API, só na Analytics, que não está autorizada; a ordem é por curtidas.
+- Só entra o que o alerta leu: o placar existe nos canais com o alerta ativo.
+
 ## Testes
 
 ```bash

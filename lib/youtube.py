@@ -88,14 +88,18 @@ def publicar(arquivo, titulo, descricao, config_dir, tags='', privacy='public', 
 
 
 def visualizacoes(ids, config_dir):
-    """Views públicas de até 50 vídeos numa chamada (1 unidade de cota). Vídeo que sumiu não volta no dicionário."""
+    """Números públicos de até 50 vídeos numa chamada (1 unidade de cota). Vídeo que sumiu não volta no dicionário.
+
+    Compartilhamentos não vêm nesta API (só na YouTube Analytics, não autorizada)."""
     ids = [i for i in ids if i][:50]
     if not ids:
         return {}
     req = urllib.request.Request(f"{API}/videos?part=statistics&id={','.join(ids)}",
                                  headers={'Authorization': f'Bearer {_token(config_dir)}'})
     _, corpo = _http(req)
-    return {v['id']: int(v.get('statistics', {}).get('viewCount') or 0) for v in json.loads(corpo).get('items', [])}
+    n = lambda s, k: int(s[k]) if s.get(k) not in (None, '') else None
+    return {v['id']: {'views': n(s, 'viewCount') or 0, 'likes': n(s, 'likeCount'), 'comentarios': n(s, 'commentCount')}
+            for v in json.loads(corpo).get('items', []) for s in [v.get('statistics', {})]}
 
 
 def definir_capa(video_id, capa, config_dir):

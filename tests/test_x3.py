@@ -987,6 +987,47 @@ class AlertaShadowban(Base):
         r = {x['rede']: (x['views'], x['resultado']) for x in self.con.execute('SELECT * FROM vigia_leituras')}
         self.assertEqual(r, {'tiktok': (4, 'baixo'), 'instagram': (120, 'ok')})
 
+    def test_placar_por_taxa_rs_ordena_por_compartilhamento(self):
+        self.canal(rs={'provedor': 'metricool', 'ligado': True, 'marca': 'FTD', 'blog_id': 7908265, 'redes': ['tiktok']})
+        vigia.ligar(self.con, 'lives3', 'rs', True)
+        self.con.execute("UPDATE vigia SET ligado_em='2000-01-01 00:00:00'")
+        fotos = f'{self.t}/fotos/2026-11-19'
+        os.makedirs(fotos)
+        rows = []
+        for n, (views, likes, com, comp) in enumerate([(1000, 50, 2, 1), (200, 10, 1, 6)]):
+            self.pasta(titulo=f'Post numero {n} sobre agentes de IA'); self.varrer()
+            runner.executar(self.con, self.job('publicar', {'destino': 'rs'}), canais.carregar(), False, lambda m: None)
+            e = self.con.execute("SELECT * FROM entregas WHERE destino='rs' AND status='feito' ORDER BY id DESC").fetchone()
+            pub = datetime.now() - timedelta(hours=30 - n)
+            self.con.execute('UPDATE entregas SET concluido_em=? WHERE id=?', (pub.strftime('%Y-%m-%d %H:%M:%S'), e['id']))
+            rows.append([(pub + timedelta(minutes=5)).strftime('%Y%m%d%H%M%S'), f'Post numero {n} sobre agentes de IA', '15', str(views), str(likes), str(com), str(comp), '900'])
+        with open(f'{fotos}/ftd-tiktok.json', 'w') as f:
+            json.dump({'rows': rows}, f)
+        with mock.patch.dict(os.environ, {'X3_VIGIA_FOTOS': f'{self.t}/fotos'}):
+            self.conferir()
+        p = vigia.analise(self.con, 'lives3')['destinos']['rs']['placar']
+        self.assertEqual(p['ordem'], 'compart')
+        self.assertEqual([x['views'] for x in p['top']], [200, 1000])  # 3% de compartilhamento vence 0,1%
+        self.assertEqual(p['top'][0]['tx_compart'], 3.0)
+        self.assertEqual(p['medianas']['likes']['mediana'], 5.0)
+
+    def test_placar_youtube_usa_leitura_de_24h_com_curtidas(self):
+        self.ligar(horas_atras=40)
+        a = self.publicar(30)
+        self.views[a] = {'views': 400, 'likes': 20, 'comentarios': 4}
+        self.conferir()
+        p = vigia.analise(self.con, 'lives3')['destinos']['youtube']['placar']
+        self.assertEqual(p['n'], 1)
+        self.assertEqual(p['ordem'], 'likes')  # YouTube não dá compartilhamento nesta API
+        self.assertEqual((p['top'][0]['tx_likes'], p['top'][0]['tx_comentarios']), (5.0, 1.0))
+
+    def test_tabela_antiga_ganha_as_colunas_novas(self):
+        self.con.execute('DROP TABLE vigia_leituras')
+        self.con.execute("CREATE TABLE vigia_leituras (id INTEGER PRIMARY KEY AUTOINCREMENT, entrega_id INTEGER NOT NULL, canal TEXT NOT NULL, destino TEXT NOT NULL, rede TEXT NOT NULL DEFAULT '', etapa TEXT NOT NULL, views INTEGER, idade_min INTEGER NOT NULL, lido_em TEXT NOT NULL, resultado TEXT NOT NULL DEFAULT '', UNIQUE(entrega_id, rede, etapa))")
+        vigia.preparar(self.con)
+        cols = {r['name'] for r in self.con.execute('PRAGMA table_info(vigia_leituras)')}
+        self.assertTrue(set(vigia.EXTRAS) <= cols)
+
     def test_config_recusa_valor_fora_da_faixa(self):
         with self.assertRaises(ValueError):
             vigia.salvar_cfg(self.con, 'lives3', {'espera_yt': 1})

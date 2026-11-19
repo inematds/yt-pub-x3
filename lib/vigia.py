@@ -33,11 +33,26 @@ DESISTE_H = 96          # post que não deu para ler em 4 dias sai da conferênc
 INTERVALO_MIN = 15      # o hub agenda uma conferência por canal a cada 15 min
 # Fotos do verdade-das-redes: blogId do Metricool → prefixo do arquivo (coleta/metricool.sh, VR_MARCAS).
 MARCAS_FOTO = {7797870: 'inema-tds', 7800440: 'eventosextremos', 7908265: 'ftd'}
-COLUNAS = {'tiktok': ('tiktok', 3), 'ig-reels': ('instagram', 2)}   # conjunto: (rede, índice das views) — coleta/junta.py
+# conjunto: (rede, {campo: índice da coluna}) — mesma ordem de coleta/junta.py do verdade-das-redes
+COLUNAS = {'tiktok': ('tiktok', {'views': 3, 'likes': 4, 'comentarios': 5, 'compart': 6, 'alcance': 7}),
+           'ig-reels': ('instagram', {'views': 2, 'alcance': 3, 'likes': 5, 'comentarios': 6, 'compart': 7, 'salvos': 8})}
+EXTRAS = ('likes', 'comentarios', 'compart', 'salvos', 'alcance')
+TAXAS = (('compart', 'Compartilhamento'), ('likes', 'Curtida'), ('comentarios', 'Comentário'), ('salvos', 'Salvo'))
 
 
 def preparar(con):
     con.executescript(SCHEMA)
+    tem = {r['name'] for r in con.execute('PRAGMA table_info(vigia_leituras)')}
+    for k in EXTRAS:
+        if k not in tem:
+            con.execute(f'ALTER TABLE vigia_leituras ADD COLUMN {k} INTEGER')
+
+
+def _stats(x):
+    """Leitor pode devolver só as views (int) ou um dicionário com os outros números."""
+    if x is None:
+        return None
+    return dict(x) if isinstance(x, dict) else {'views': int(x)}
 
 
 def agora():
@@ -130,7 +145,7 @@ def ler_rs(canal, itens):
     if not prefixo or not dias:
         return {}
     linhas = []
-    for conj, (rede, col) in COLUNAS.items():
+    for conj, (rede, cols) in COLUNAS.items():
         try:
             with open(os.path.join(dias[-1], f'{prefixo}-{conj}.json'), encoding='utf-8') as f:
                 rows = json.load(f).get('rows') or []
@@ -139,7 +154,15 @@ def ler_rs(canal, itens):
         for r in rows:
             try:
                 quando = datetime.strptime(str(r[0])[:14], '%Y%m%d%H%M%S')
-                linhas.append((rede, quando, _norm(r[1]), int(float(r[col] or 0))))
+                num = {}
+                for k, i in cols.items():
+                    try:
+                        num[k] = int(float(r[i])) if r[i] not in (None, '') else None
+                    except (IndexError, ValueError, TypeError):
+                        num[k] = None
+                if num['views'] is None:
+                    continue
+                linhas.append((rede, quando, _norm(r[1]), num))
             except (ValueError, IndexError, TypeError):
                 continue
     out = {}
@@ -148,9 +171,9 @@ def ler_rs(canal, itens):
         if len(alvo) < 12:
             continue
         pub = _dt(it['concluido_em'])
-        for rede, quando, texto, views in linhas:
+        for rede, quando, texto, num in linhas:
             if texto.startswith(alvo) and timedelta(hours=-2) <= quando - pub <= timedelta(hours=36):
-                out.setdefault(it['entrega_id'], {})[rede] = views
+                out.setdefault(it['entrega_id'], {})[rede] = num
     return out
 
 
@@ -172,10 +195,12 @@ def _candidatos(con, canal, destino, espera_min, etapa):
     return [dict(r) for r in con.execute(sql, (canal, destino, e['ligado_em'], limite, velho, etapa))]
 
 
-def _gravar(con, c, destino, rede, etapa, views, resultado):
+def _gravar(con, c, destino, rede, etapa, st, resultado):
+    st = st or {}
     idade = int((datetime.now() - _dt(c['concluido_em'])).total_seconds() // 60)
-    con.execute('INSERT OR IGNORE INTO vigia_leituras(entrega_id,canal,destino,rede,etapa,views,idade_min,lido_em,resultado) VALUES(?,?,?,?,?,?,?,?,?)',
-                (c['entrega_id'], c['canal'], destino, rede, etapa, views, idade, agora(), resultado))
+    con.execute(f"""INSERT OR IGNORE INTO vigia_leituras(entrega_id,canal,destino,rede,etapa,views,idade_min,lido_em,resultado,{','.join(EXTRAS)})
+                    VALUES(?,?,?,?,?,?,?,?,?{',?' * len(EXTRAS)})""",
+                (c['entrega_id'], c['canal'], destino, rede, etapa, st.get('views'), idade, agora(), resultado, *(st.get(k) for k in EXTRAS)))
 
 
 def _sequencia(con, canal, destino, n):
@@ -197,18 +222,18 @@ def conferir(con, canal, avisar=print, log=print):
             dia = _candidatos(con, nome, 'youtube', 24 * 60, 'dia')
             todos = {x['ref']: x for x in cand + dia}
             leitor = LEITORES['youtube'] or ler_youtube
-            views = {}
+            st = {}
             refs = list(todos)
             for i in range(0, len(refs), 50):
-                views.update(leitor(canal, refs[i:i + 50]))
+                st.update({k: _stats(v) for k, v in leitor(canal, refs[i:i + 50]).items()})
             for x in cand:
                 x['canal'] = nome
-                v = views.get(x['ref'])
-                _gravar(con, x, 'youtube', 'youtube', 'verifica', v, 'sumiu' if v is None else 'baixo' if v < c['limite_yt'] else 'ok')
+                v = (st.get(x['ref']) or {}).get('views')
+                _gravar(con, x, 'youtube', 'youtube', 'verifica', st.get(x['ref']), 'sumiu' if v is None else 'baixo' if v < c['limite_yt'] else 'ok')
             for x in dia:
                 x['canal'] = nome
-                _gravar(con, x, 'youtube', 'youtube', 'dia', views.get(x['ref']), '')
-            lidos = [(x, {'youtube': views.get(x['ref'])}) for x in cand]
+                _gravar(con, x, 'youtube', 'youtube', 'dia', st.get(x['ref']), '')
+            lidos = [(x, {'youtube': (st.get(x['ref']) or {}).get('views')}) for x in cand]
             limite = c['limite_yt']
         else:
             cand = _candidatos(con, nome, 'rs', c['espera_rs'] * 60, 'verifica')
@@ -221,9 +246,10 @@ def conferir(con, canal, avisar=print, log=print):
                     if (datetime.now() - _dt(x['concluido_em'])).total_seconds() > (c['espera_rs'] + 48) * 3600:
                         _gravar(con, x, 'rs', '', 'verifica', None, 'sem_dado')
                     continue
+                redes = {r: _stats(v) for r, v in redes.items()}
                 for rede, v in redes.items():
-                    _gravar(con, x, 'rs', rede, 'verifica', v, 'baixo' if v < c['limite_rs'] else 'ok')
-                lidos.append((x, redes))
+                    _gravar(con, x, 'rs', rede, 'verifica', v, 'baixo' if v['views'] < c['limite_rs'] else 'ok')
+                lidos.append((x, {r: v['views'] for r, v in redes.items()}))
             limite = c['limite_rs']
         for x, redes in lidos:
             baixos = {r: v for r, v in redes.items() if v is not None and v < limite}
@@ -232,7 +258,10 @@ def conferir(con, canal, avisar=print, log=print):
         seq = _sequencia(con, nome, destino, c['seguidos'])
         e = estado(con, nome, destino)
         if not e['travado'] and len(seq) == c['seguidos'] and all(s == 'baixo' for s in seq):
-            motivo = f"{c['seguidos']} post(s) seguidos abaixo de {limite} views"
+            ultimos = [x['entrega_id'] for x, _ in lidos][-c['seguidos']:] or [0]
+            redes = sorted({r['rede'] for r in con.execute(
+                f"SELECT DISTINCT rede FROM vigia_leituras WHERE resultado='baixo' AND etapa='verifica' AND entrega_id IN ({','.join('?' * len(ultimos))})", ultimos)})
+            motivo = f"{c['seguidos']} post(s) seguidos abaixo de {limite} views" + (f" no {' e '.join(redes)}" if destino == 'rs' and redes else '')
             con.execute('UPDATE vigia SET travado=1, motivo=?, desde=? WHERE canal=? AND destino=?', (motivo, agora(), nome, destino))
             extra = 'Publicação PAUSADA até você destravar.' if c['auto_pausa'] else 'A publicação continua (pausa automática desligada).'
             avisar(f"{nome}: {destino} TRAVADO pelo alerta de shadowban: {motivo}. {extra} Destravar no painel do canal.", log)
@@ -252,7 +281,8 @@ def analise(con, canal, limite=40):
     out = {'cfg': c, 'padrao': PADRAO, 'faixas': FAIXAS, 'destinos': {}}
     for d in ('youtube', 'rs'):
         rows = [dict(r) for r in con.execute(
-            """SELECT l.entrega_id, l.rede, l.etapa, l.views, l.idade_min, l.lido_em, l.resultado, i.titulo, e.concluido_em, e.url
+            f"""SELECT l.entrega_id, l.rede, l.etapa, l.views, l.idade_min, l.lido_em, l.resultado, {','.join('l.' + k for k in EXTRAS)},
+                      i.titulo, e.concluido_em, e.url
                FROM vigia_leituras l JOIN entregas e ON e.id=l.entrega_id JOIN itens i ON i.id=e.item_id
                WHERE l.canal=? AND l.destino=? ORDER BY e.concluido_em DESC, l.etapa DESC LIMIT ?""", (canal, d, limite * 3))]
         lim = c['limite_yt' if d == 'youtube' else 'limite_rs']
@@ -260,5 +290,27 @@ def analise(con, canal, limite=40):
         out['destinos'][d] = {
             'leituras': rows, 'limite': lim, 'n': len(vs), 'mediana': statistics.median(vs) if vs else None,
             'baixos': sum(v < lim for v in vs), 'estado': estado(con, canal, d),
-            'mediana_dia': statistics.median(x) if (x := [r['views'] for r in rows if r['etapa'] == 'dia' and r['views'] is not None]) else None}
+            'mediana_dia': statistics.median(x) if (x := [r['views'] for r in rows if r['etapa'] == 'dia' and r['views'] is not None]) else None,
+            'placar': placar(rows, d)}
     return out
+
+
+def _taxa(r, k):
+    return round(100 * r[k] / r['views'], 2) if r.get(k) is not None and r.get('views') else None
+
+
+def placar(rows, destino):
+    """Placar por taxa (% das views), não por views. YouTube usa a leitura de 24 h; RS a conferência (já é de 24 h+).
+
+    Uma linha por post e rede; post sem leitura de 24 h no YouTube ainda não entra."""
+    etapa = 'dia' if destino == 'youtube' else 'verifica'
+    pecas = [{**r, **{f'tx_{k}': _taxa(r, k) for k, _ in TAXAS}} for r in rows if r['etapa'] == etapa and r['views']]
+    med = {}
+    for k, nome in TAXAS:
+        v = [p[f'tx_{k}'] for p in pecas if p[f'tx_{k}'] is not None]
+        med[k] = {'nome': nome, 'mediana': round(statistics.median(v), 2) if v else None, 'n': len(v)}
+    chave = 'tx_compart' if any(p['tx_compart'] is not None for p in pecas) else 'tx_likes'
+    top = sorted(pecas, key=lambda p: (p[chave] or 0, p['views']), reverse=True)[:5]
+    campos = ('entrega_id', 'rede', 'titulo', 'url', 'concluido_em', 'views', *EXTRAS, *(f'tx_{k}' for k, _ in TAXAS))
+    return {'n': len(pecas), 'medianas': med, 'ordem': chave[3:], 'top': [{k: p.get(k) for k in campos} for p in top],
+            'meta_compart': 1.0}
