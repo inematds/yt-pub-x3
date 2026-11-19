@@ -165,6 +165,7 @@
     <a class="sec" href="#explicado">The benefit</a>
     <a class="sec" href="#dia">Day to day</a>
     <a class="sec opt" href="#como">How it works</a>
+    <a class="sec opt" href="#alerta">Alert</a>
     <a class="sec" href="#comecar">Getting started</a>
     <a class="sec opt" href="#prova">The proof</a>
     <span class="lang"><a href="../">PT</a><a class="on" href="./">EN</a><a href="../es/">ES</a></span>
@@ -247,6 +248,22 @@
     <div class="card"><h3>🚫 You don't need it if</h3><p>You schedule your posts manually in Metricool, the social media scheduling tool. In that case, each post is already independent.</p></div>
   </div>
   <p class="fonte" style="margin-top:20px"><strong>What it doesn't promise:</strong> It doesn't guarantee views, create videos from scratch, change a video's format, or bypass each platform's limits. A connector is the piece that links the system to a publishing tool. This project calls a Metricool connector, but the one we use is part of INEMA's operation and isn't included in this package. Outside that setup, social media only works after someone builds a connector for you. There are no connectors for other tools yet, such as Blotato.</p>
+</div></section>
+
+<section id="alerta"><div class="wrap">
+  <span class="chip">New · shadowban alert</span>
+  <h2>Has your post stopped appearing? <span class="amb">Find out the same day</span></h2>
+  <p class="sub">When a platform hides your posts, views plummet without warning. The alert checks each post and lets you know before the whole week goes out to no one.</p>
+  <div class="grid g3">
+    <div class="card"><h3>📺 On YouTube</h3><p>One hour after publishing, the system reads the video's views. It reads them again after 24 hours for analysis. Each read uses almost none of the daily quota.</p></div>
+    <div class="card"><h3>📱 On social media</h3><p>It doesn't make a new query: it uses the daily snapshot of metrics Metricool already stores, 24 hours after the post.</p></div>
+    <div class="card"><h3>🚨 The alert and the lock</h3><p>Below the threshold (20 views to start), you get an alert. Two low-performing posts in a row set the destination to <strong>Locked</strong>. You can unlock it in the dashboard.</p></div>
+  </div>
+  <div class="grid g2" style="margin-top:16px">
+    <div class="card"><h3>📊 Rate-based scorecard</h3><p>Each destination gets a scorecard showing view percentages: shares, likes, comments, and saves per post, along with the channel median and the top 5. The share target is 1%. On YouTube, the ranking is based on likes because shares aren't included in the data we use.</p></div>
+    <div class="card"><h3>🎚️ You set the threshold</h3><p>The alert starts disabled for every channel and only monitors posts published after you turn it on. The tab shows the median and how many posts would trigger an alert at the current threshold, so you can calibrate each channel. Automatic pausing also starts disabled: locking a destination doesn't stop the queue until you turn it on.</p></div>
+  </div>
+  <p class="fonte" style="margin-top:20px"><strong>What it doesn't do:</strong> it doesn't prove there was a shadowban; it only shows that a post performed far below normal. It also doesn't restore reach or change anything already published.</p>
 </div></section>
 
 <section id="comecar"><div class="wrap">
