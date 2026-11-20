@@ -453,7 +453,7 @@ class CapasClipes(Base):
         d = f'{self.t}/legado/yt-pub-lives3/data'
         os.makedirs(d)
         v = sqlite3.connect(f'{d}/lives.db')
-        v.execute("CREATE TABLE publicados (id INTEGER PRIMARY KEY, clip_video_id TEXT, live_video_id TEXT)")
+        v.execute("CREATE TABLE publicados (id INTEGER PRIMARY KEY, clip_video_id TEXT, live_video_id TEXT, privacy TEXT DEFAULT 'public')")
         for vid, live in [('V1', 'L'), ('V2', 'L'), ('V3', 'import_x'), ('erro_upload', 'L'), ('V4', 'L')]:
             v.execute('INSERT INTO publicados(clip_video_id, live_video_id) VALUES(?,?)', (vid, live))
         v.commit(); v.close()
@@ -483,10 +483,25 @@ class CapasClipes(Base):
         self.assertEqual(sorted(self.subidas), ['V1', 'V4'])
         self.assertEqual(self.gerar(), 'nada a trocar')
 
+    def test_retroativo_anda_para_tras_ate_o_limite_do_dia(self):
+        self.canal(capas_clipes={'ligado': True, 'ultimos': 1, 'por_dia': 2, 'retroativo': True})
+        c = lambda: [v for v, _ in capas_clipes.candidatos(self.con, self.c(), lambda n: self.marca)]
+        self.assertEqual(c(), ['V4', 'V2'])  # o liso recente primeiro, depois o histórico do mais novo para o mais velho
+        self.gerar(); self.subir()
+        self.assertEqual(c(), ['V1'])
+        self.gerar(); self.subir()
+        self.assertEqual(c(), [])
+
     def test_cota_acabou_fica_para_amanha(self):
         self.gerar()
         self.assertIn('cota acabou', self.subir('HTTP 403: quotaExceeded'))
         self.assertEqual(self.con.execute("SELECT COUNT(*) FROM capas_clipes WHERE status='gerada'").fetchone()[0], 2)
+
+    def test_limite_de_capas_do_youtube_guarda_para_amanha(self):
+        self.canal(capas_clipes={'ligado': True, 'ultimos': 3, 'por_dia': 2, 'retroativo': True})
+        self.gerar()
+        self.assertIn('limite de troca', self.subir('HTTP 429: The user has uploaded too many thumbnails recently.'))
+        self.assertEqual(self.gerar(), 'nada a trocar')  # as 2 da fila ocupam as vagas do dia
 
     def test_canal_sem_permissao(self):
         self.gerar()

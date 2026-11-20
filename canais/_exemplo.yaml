@@ -32,6 +32,8 @@ enriquecer:              # lives com título genérico: título, descrição e c
   prompt: ''             # vazio = config/prompt_enrich.txt do agendador antigo do canal
 capas_clipes:            # troca a capa dos últimos clipes que saíram sem capa do Codex
   ligado: false
-  gerar: '02:30'          # só Codex, não gasta cota
+  gerar: '01:30'          # só Codex, não gasta cota (~2 min por capa)
   subir: '03:30'          # antes da virada da cota (meia-noite do Pacífico)
-  ultimos: 10
+  ultimos: 10             # sempre confere estes
+  por_dia: 10             # 50 unidades de cota cada; o YouTube recusa (429) depois de ~10 trocas
+  retroativo: false       # true = o que sobra do dia anda para trás no histórico

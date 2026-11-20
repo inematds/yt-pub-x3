@@ -37,33 +37,41 @@ def _log_antigo(nome):
     return out
 
 
-def _clipes_antigos(nome, ultimos):
+def _clipes_antigos(nome, limite=None):
+    """Clipes de live do agendador antigo, do mais novo para o mais velho."""
     p = os.path.join(config.legado_dir(), f'yt-pub-{nome}', 'data', 'lives.db')
     if not os.path.exists(p):
         return []
     v = sqlite3.connect(f'file:{p}?mode=ro', uri=True, timeout=10)
     try:
         return [r[0] for r in v.execute("""SELECT clip_video_id FROM publicados WHERE clip_video_id NOT LIKE 'erro%' AND clip_video_id NOT LIKE 'moved_%'
-                    AND clip_video_id NOT IN ('', 'publicando') AND live_video_id NOT LIKE 'import_%' ORDER BY id DESC LIMIT ?""", (ultimos,))]
+                    AND clip_video_id NOT IN ('', 'publicando') AND live_video_id NOT LIKE 'import_%' AND privacy='public'
+                    ORDER BY id DESC LIMIT ?""", (limite or -1,))]
     finally:
         v.close()
 
 
 def candidatos(con, canal, log_antigo=None):
-    """[(video_id, item_id ou None)] dos últimos clipes que precisam de capa nova."""
-    nome, ultimos = canal['nome'], int(canal['capas_clipes']['ultimos'])
-    feitos = {r[0] for r in con.execute("SELECT video_id FROM capas_clipes WHERE canal=? AND status IN ('gerada','aplicada')", (nome,))}
+    """[(video_id, item_id ou None)] até `por_dia`: primeiro os últimos clipes sem capa do Codex,
+    depois (com `retroativo`) os clipes antigos do mais novo para o mais velho, até todos terem capa do Codex."""
+    cc = canal['capas_clipes']
+    nome, ultimos, por_dia = canal['nome'], int(cc['ultimos']), int(cc['por_dia'])
+    feitos = {r[0] for r in con.execute("SELECT video_id FROM capas_clipes WHERE canal=? AND status IN ('gerada','aplicada','erro')", (nome,))}
     out = []
     for r in con.execute("""SELECT e.ref, i.id FROM entregas e JOIN itens i ON i.id=e.item_id WHERE i.canal=? AND e.destino='youtube'
                             AND e.status='feito' AND e.ref!='' AND i.tipo IN ('clip','video') AND i.capa_status='pendente'
                             ORDER BY e.concluido_em DESC LIMIT ?""", (nome, ultimos)):
         if r[0] not in feitos:
             out.append((r[0], r[1]))
-    antigos = _clipes_antigos(nome, ultimos)
+    antigos = _clipes_antigos(nome)
     if antigos:
         marca = (log_antigo or _log_antigo)(nome)
-        out += [(v, None) for v in antigos if marca.get(v) == 'liso' and v not in feitos]
-    return out
+        recentes = antigos[:ultimos]
+        out += [(v, None) for v in recentes if marca.get(v) == 'liso' and v not in feitos]
+        if cc['retroativo']:  # o resto do dia anda para trás no histórico, até todos terem a thumb viral do Codex
+            ja = {v for v, _ in out}
+            out += [(v, None) for v in antigos if v not in feitos and v not in ja]
+    return out[:por_dia]
 
 
 def _gravar(con, nome, vid, item_id, status, capa='', msg=''):
@@ -77,7 +85,9 @@ def gerar(con, canal, simular, log=print, log_antigo=None, ler=None, capa=None):
     nome = canal['nome']
     if db.capa_permissao(con, nome) == 'nao':
         return 'canal sem permissão de capa'
-    cands = candidatos(con, canal, log_antigo)
+    # Capa gerada que ainda não subiu ocupa vaga do dia: o YouTube limita as trocas de capa por canal (HTTP 429).
+    na_fila = con.execute("SELECT COUNT(*) FROM capas_clipes WHERE canal=? AND status='gerada'", (nome,)).fetchone()[0]
+    cands = candidatos(con, canal, log_antigo)[:max(0, int(canal['capas_clipes']['por_dia']) - na_fila)]
     if simular or not cands:
         return 'simulado: ' + ', '.join(v for v, _ in cands) if simular else 'nada a trocar'
     snip = (ler or youtube.snippets)([v for v, _ in cands], canal['config_dir'])
@@ -112,6 +122,8 @@ def subir(con, canal, simular, log=print, definir=None):
             if RECUSA_CAPA in str(e):
                 db.definir_capa_permissao(con, nome, 'nao', str(e))
                 return f'{n} trocada(s); canal sem permissão de capa'
+            if 'too many thumbnails' in str(e):
+                return f'{n} trocada(s); limite de troca de capas do YouTube, o resto vai amanhã'
             if 'quota' in str(e).lower() or 'HTTP 429' in str(e):
                 return f'{n} trocada(s); cota acabou, o resto vai amanhã'
             _gravar(con, nome, r['video_id'], r['item_id'], 'gerada', r['capa'], str(e))

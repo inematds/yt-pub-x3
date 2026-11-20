@@ -18,7 +18,8 @@ CLIPES = {'horarios': []}
 CORTES = {'ligado': False, 'horarios': [], 'max_por_dia': 1, 'ai_modo': 'claude-api'}
 ENRIQUECER = {'ligado': False, 'horarios': [], 'max_por_vez': 3, 'prompt': ''}
 # Cota do YouTube vira à meia-noite do Pacífico (04:00/05:00 de Brasília): sobe às 03:30 com a cota que sobrou do dia.
-CAPAS_CLIPES = {'ligado': False, 'gerar': '02:30', 'subir': '03:30', 'ultimos': 10}
+# Além da cota, o YouTube limita a troca de capas por canal: em 20/11/2026 o 429 veio depois de 10 em poucas horas.
+CAPAS_CLIPES = {'ligado': False, 'gerar': '01:30', 'subir': '03:30', 'ultimos': 10, 'por_dia': 10, 'retroativo': False}
 
 
 def _lista(v):
