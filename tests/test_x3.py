@@ -1389,5 +1389,43 @@ class Login(Base):
         self.assertNotIn('segredo123', b)
 
 
+class TestGeracao(unittest.TestCase):
+    BASE = {'LoadState': ['loaded'], 'ActiveState': ['active'], 'TimersCalendar': [], '_servico': {'Result': 'success'}}
+
+    def test_calendario(self):
+        from lib import geracao
+        self.assertEqual(geracao.calendario('Mon..Fri *-*-* 09,15:00:00'), ('seg–sex', ['09:00', '15:00']))
+        self.assertEqual(geracao.calendario('*-*-* 12:30:00'), ('todo dia', ['12:30']))
+        self.assertEqual(geracao.calendario('Sun *-*-* 14:00:00'), ('dom', ['14:00']))
+        self.assertEqual(geracao.calendario('*-*-* *:0/5:00'), ('todo dia', ['a cada 5 min']))
+
+    def test_ler_com_timers_falsos(self):
+        from lib import geracao
+        props = {'clima-dia': {'Id': ['clima-dia.timer'], 'LoadState': ['loaded'], 'ActiveState': ['active'],
+                               'TimersCalendar': ['{ OnCalendar=*-*-* 12:30:00 ; next_elapse=x }'],
+                               'NextElapseUSecRealtime': ['Fri 2026-11-20 12:30:00 -03'], 'LastTriggerUSec': [''],
+                               '_servico': {'Result': 'exit-code', 'ActiveState': 'inactive'}}}
+        r = geracao.ler({'lives10': {'destino_nome': 'Eventos Extremos'}}, props=props, placar={})
+        g = next(x for x in r['geradores'] if x['id'] == 'clima-dia')
+        self.assertEqual(g['execucoes'][0]['proximo'], '2026-11-20 12:30')
+        self.assertIn({'hora': '12:30', 'dias': 'todo dia', 'gerador': g['nome'], 'rotulo': '', 'canais': ['lives10'], 'ligado': True}, r['grade'])
+        self.assertEqual(next(p for p in r['por_canal'] if p['canal'] == 'lives10')['titulo'], 'Eventos Extremos')
+        self.assertFalse(next(x for x in r['geradores'] if x['id'] == 'clima-mundo')['execucoes'][0]['existe'])
+        self.assertTrue(all(p['canal'].startswith('lives') for p in r['por_canal']))
+        self.assertEqual([f['timer'] for f in r['falhas']], ['clima-dia'])  # systemd exit-code sem placar
+
+    def test_falha_e_retificacao_do_placar(self):
+        from lib import geracao
+        d = tempfile.mkdtemp()
+        arq = os.path.join(d, 'rodadas.jsonl')
+        with open(arq, 'w') as f:
+            f.write(json.dumps({'ts': '2026-11-19T14:40:00-03:00', 'unidade': 'clima-dia', 'fase': 'fim', 'resultado': 'falhou', 'motivo': 'x'}) + '\n')
+            f.write(json.dumps({'ts': '2026-11-19T14:40:00-03:00', 'unidade': 'clima-mundo', 'fase': 'fim', 'resultado': 'falhou', 'motivo': 'y'}) + '\n')
+            f.write(json.dumps({'ts': '2026-11-20T03:00:00-03:00', 'unidade': 'clima-mundo', 'fase': 'retificacao', 'resultado': 'publicado'}) + '\n')
+        r = geracao.ler({}, props={'clima-dia': dict(self.BASE), 'clima-mundo': dict(self.BASE)}, placar=geracao._placar(arq))
+        self.assertEqual([f['timer'] for f in r['falhas']], ['clima-dia'])
+        shutil.rmtree(d)
+
+
 if __name__ == '__main__':
     unittest.main()
