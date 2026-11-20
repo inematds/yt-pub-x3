@@ -17,7 +17,7 @@ from urllib.parse import parse_qs, urlsplit
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, RAIZ)
-from lib import canais as canais_mod, db, login, painel, runner, vigia  # noqa: E402
+from lib import canais as canais_mod, db, distribuicao, login, painel, runner, vigia  # noqa: E402
 
 HTML = os.path.join(RAIZ, 'dashboard', 'index.html')
 USUARIO_REDE = 'x3'
@@ -61,6 +61,8 @@ class Painel(BaseHTTPRequestHandler):
                 self.wfile.write(b)
             elif caminho == '/api/filas':
                 self._json(200, {'canais': painel.filas(con, canais, busca=q.get('q', ''), tipo=q.get('tipo', ''), canal=q.get('canal', ''))})
+            elif caminho == '/api/distribuicao':
+                self._json(200, distribuicao.ler(canais))
             elif caminho == '/api/estado':
                 self._json(200, painel.estado(con, canais))
             elif caminho == '/api/login/retorno':
