@@ -4,11 +4,11 @@ import os
 import subprocess
 from datetime import datetime, timedelta
 
-from . import config, cortes, db, entrada, ia, metricool, vigia, youtube
+from . import config, cortes, db, entrada, ia, login, metricool, vigia, youtube
 from .falhas import AMBIGUO, AUTH, COTA, DEFINITIVO, FORMATO, Falha
 
 PAUSA = {AUTH: timedelta(hours=1), COTA: timedelta(hours=6)}
-FAIXAS = {'publicar': None, 'publicar_entrega': None, 'entrada': 'geral', 'capa': 'geral', 'sync_lives': 'geral', 'cortar': 'cortes', 'vigiar': 'geral'}
+FAIXAS = {'publicar': None, 'publicar_entrega': None, 'entrada': 'geral', 'capa': 'geral', 'sync_lives': 'geral', 'cortar': 'cortes', 'vigiar': 'geral', 'login': 'geral'}
 
 
 def pub_youtube(canal, item, log=print):
@@ -170,6 +170,8 @@ def executar(con, job, canais, simular, log=print):
                 return r
         elif t == 'capa':
             r = fazer_capa(con, canal, p['item_id'], simular, log)
+        elif t == 'login':
+            r = login.testar(con, canal, avisar, log)  # só renova o token: sem cota e sem publicar, roda também em simulação
         elif t == 'vigiar':
             r = 'simulado' if simular else vigia.conferir(con, canal, avisar, log)
         elif t == 'sync_lives':

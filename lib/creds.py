@@ -1,8 +1,8 @@
-"""Credenciais por canal — le do config_dir do canal, NUNCA copia.
+"""Credenciais por canal — le do config_dir do canal.
 
 Formato identico ao v1 (yt-auth): config_dir/.env com CLIENT_ID/CLIENT_SECRET/API_KEY,
 config_dir/credentials.enc (AES-GCM, nonce 12 bytes + ciphertext) e config_dir/.encryption_key
-(chave base64). Assim os 17 canais ja autenticados funcionam sem migrar nada.
+(chave base64). Desde a v0.6.0 o config_dir e uma copia propria do x3 (lib/login.py), fora do git.
 """
 import base64
 import json

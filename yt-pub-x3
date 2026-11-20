@@ -157,6 +157,20 @@ def mig_clipes(a):
     print(f'{a.para}: {novos} na fila · {rep} repetidos ignorados')
 
 
+def cmd_login(a):
+    from lib import login
+    cs = canais_mod.carregar()
+    if a.canal:
+        cs = {a.canal: canal(a.canal)}
+    if a.acao == 'copiar':
+        for n, r in login.copiar(cs):
+            print(f'{n:8} {r}')
+        cs = canais_mod.carregar() if not a.canal else {a.canal: canal(a.canal)}
+    con = db.connect()
+    for n, c in cs.items():
+        print(f"{n:8} {'próprio' if login.proprio(c) else 'antigo '} {login.testar(con, c)}")
+
+
 ap = argparse.ArgumentParser(prog='yt-pub-x3')
 sub = ap.add_subparsers(dest='cmd', required=True)
 p = sub.add_parser('enviar', help='põe uma pasta na fila')
@@ -202,5 +216,9 @@ p.add_argument('--imports-erro', action='store_true')
 p.add_argument('--imports-pendentes', action='store_true')
 p.add_argument('--aplicar', action='store_true')
 p.set_defaults(f=mig_clipes)
+p = sub.add_parser('login', help='login próprio do YouTube: copiar das pastas antigas ou testar')
+p.add_argument('acao', choices=('copiar', 'testar'))
+p.add_argument('canal', nargs='?')
+p.set_defaults(f=cmd_login)
 a = ap.parse_args()
 a.f(a)

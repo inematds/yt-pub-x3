@@ -17,7 +17,7 @@ from urllib.parse import parse_qs, urlsplit
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, RAIZ)
-from lib import canais as canais_mod, db, painel, vigia  # noqa: E402
+from lib import canais as canais_mod, db, login, painel, runner, vigia  # noqa: E402
 
 HTML = os.path.join(RAIZ, 'dashboard', 'index.html')
 USUARIO_REDE = 'x3'
@@ -63,6 +63,20 @@ class Painel(BaseHTTPRequestHandler):
                 self._json(200, {'canais': painel.filas(con, canais, busca=q.get('q', ''), tipo=q.get('tipo', ''), canal=q.get('canal', ''))})
             elif caminho == '/api/estado':
                 self._json(200, painel.estado(con, canais))
+            elif caminho == '/api/login/retorno':
+                # Volta do Google. Nada do código aparece na página nem em log.
+                if q.get('error'):
+                    ok, msg = False, f"o Google respondeu: {q['error'][:80]}"
+                else:
+                    ok, msg = login.concluir(con, canais, q.get('state'), q.get('code'), runner.avisar)
+                b = login.pagina(ok, msg)
+                self.send_response(200)
+                self.send_header('Content-Type', 'text/html; charset=utf-8')
+                self.send_header('Content-Length', str(len(b)))
+                self.send_header('Cache-Control', 'no-store')
+                self.send_header('Referrer-Policy', 'no-referrer')
+                self.end_headers()
+                self.wfile.write(b)
             else:
                 m = re.fullmatch(r'/api/canal/([\w-]+)', caminho)
                 a = re.fullmatch(r'/api/vigia/([\w-]+)', caminho)
@@ -106,6 +120,25 @@ class Painel(BaseHTTPRequestHandler):
                 else:
                     vigia.ligar(con, m.group(1), m.group(2), m.group(3) == 'ligar')
                 return self._json(200, {'ok': True})
+            m = re.fullmatch(r'/api/login/([\w-]+)/(testar|autenticar)', self.path)
+            cs = canais_mod.carregar() if m or self.path == '/api/login/colar' else {}
+            if m and m.group(1) in cs:
+                c = cs[m.group(1)]
+                if m.group(2) == 'testar':
+                    return self._json(200, {'ok': True, 'resultado': login.testar(con, c, runner.avisar)})
+                try:
+                    return self._json(200, {'ok': True, 'url': login.iniciar(con, c)})
+                except ValueError as e:
+                    return self._json(400, {'erro': str(e)})
+            if self.path == '/api/login/colar':
+                try:
+                    tamanho = int(self.headers.get('Content-Length') or 0)
+                    if not 0 < tamanho <= 8192:
+                        raise ValueError('tamanho inválido')
+                    ok, msg = login.colar(con, cs, json.loads(self.rfile.read(tamanho)).get('url'), runner.avisar)
+                    return self._json(200 if ok else 400, {'ok': ok, 'msg' if ok else 'erro': msg})
+                except (ValueError, AttributeError) as e:
+                    return self._json(400, {'erro': str(e)})
             m = re.fullmatch(r'/api/vigia/([\w-]+)/cfg', self.path)
             if m and m.group(1) in canais_mod.carregar():
                 try:

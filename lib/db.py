@@ -58,8 +58,9 @@ def connect(path=None):
     con.execute('PRAGMA journal_mode=WAL')
     con.execute('PRAGMA busy_timeout=30000')
     con.executescript(SCHEMA)
-    from . import vigia
+    from . import login, vigia
     vigia.preparar(con)
+    login.preparar(con)
     return con
 
 

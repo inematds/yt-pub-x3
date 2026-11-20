@@ -36,6 +36,7 @@ Com arquivo e sem destino definido: lives1 8 clipes, lives9 11 imports e lives22
 - 51 testes passam com publicadores falsos.
 - 19 canais importados com `ativo: false`; 334 lives do lives1 importadas.
 - Login do YouTube válido em 17 canais. lives5 (`invalid_grant`) e lives32 (`disabled_client`) precisam de nova autorização.
+- Desde 20/11/2026 (v0.6.0) o x3 usa cópia própria do login em `~/.config/yt-pub-x3/youtube/<canal>/`; os 17 renovaram o token a partir dela. Teste de 6 em 6 h e botão Autenticar no painel do canal. Autenticar de novo no x3 não muda o login das pastas antigas (yt-pubx e agendadores antigos seguem com o deles).
 - Publicador do Metricool, `gh`, `ffprobe`, `yt-dlp` e `codex` disponíveis.
 
 ## Bloqueios

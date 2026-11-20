@@ -34,6 +34,11 @@ def historico_ytpubx():
     return _p('X3_HISTORICO_YTPUBX', '~/.local/share/yt-pubx/historico.jsonl')
 
 
+def login_dir():
+    """Login próprio do YouTube por canal, fora do git: <login_dir>/<canal>/."""
+    return _p('X3_LOGIN_DIR', '~/.config/yt-pub-x3/youtube')
+
+
 def legado_dir():
     return _p('X3_LEGADO', PROJETOS)
 

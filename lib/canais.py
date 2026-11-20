@@ -67,6 +67,25 @@ def definir_horarios(nome, secao, horarios, dir_=None):
     return horarios
 
 
+def definir_config_dir(nome, valor, dir_=None):
+    """Troca só a linha config_dir do arquivo do canal (guarda .bak do anterior)."""
+    p = os.path.join(dir_ or config.canais_dir(), nome + '.yaml')
+    with open(p, encoding='utf-8') as f:
+        texto = f.read()
+    with open(p + '.bak', 'w', encoding='utf-8') as f:
+        f.write(texto)
+    linha = f'config_dir: {valor}'
+    novo, n = re.subn(r'^config_dir:.*$', lambda _: linha, texto, count=1, flags=re.M)
+    if not n:
+        novo = texto.rstrip('\n') + '\n' + linha + '\n'
+    if (yaml.safe_load(novo) or {}).get('config_dir') != valor:
+        raise ValueError(f'não consegui gravar config_dir em {p}')
+    tmp = f'{p}.{os.getpid()}.tmp'
+    with open(tmp, 'w', encoding='utf-8') as f:
+        f.write(novo)
+    os.replace(tmp, p)
+
+
 def carregar(dir_=None):
     out = {}
     ordem = lambda x: [int(t) if t.isdigit() else t for t in re.split(r'(\d+)', os.path.basename(x))]

@@ -42,7 +42,7 @@ python3 hub.py --once                          # simulação
 python3 dashboard/server.py 8230               # http://127.0.0.1:8230
 ```
 
-`config_dir` guarda o login do YouTube: `.env` com `CLIENT_ID`, `CLIENT_SECRET` e `API_KEY`, `credentials.enc` e `.encryption_key`. Para criar: `GWS_CONFIG_DIR=<config_dir> scripts/yt-auth`. `importar-canais` só serve para quem já tem instâncias `yt-pub-livesN`.
+`config_dir` guarda o login do YouTube: `.env` com `CLIENT_ID`, `CLIENT_SECRET` e `API_KEY`, `credentials.enc` e `.encryption_key`. Para criar: `GWS_CONFIG_DIR=<config_dir> scripts/yt-auth`. `importar-canais` só serve para quem já tem instâncias `yt-pub-livesN`. Depois de importar, `./yt-pub-x3 login copiar` dá a cada canal uma cópia própria em `~/.config/yt-pub-x3/youtube/<canal>/` (pastas 700, arquivos 600, fora do git) e aponta o `config_dir` para lá; a origem não é alterada.
 
 **Conector do Metricool.** O publicador é um programa externo, indicado por `X3_METRICOOL_VIDEO` (padrão: `~/projetos/metricool-inematds/publicar.sh`). Ele recebe `<video> <legenda.txt> <repo-público>` e as variáveis `MARCA` e `REDES`. Saídas: `0` agendado (imprima `Metricool: <url>`), `2` formato recusado, outra = tentar de novo. Precisa ser idempotente. A mídia fica pública no repo de `X3_METRICOOL_REPO`, para o Metricool poder baixar: use um repo seu e leve isso em conta em conteúdo inédito. Foto e carrossel usam `scripts/metricool-imagens.sh`, que espera a mesma estrutura em `X3_METRICOOL_DIR`.
 
@@ -67,6 +67,7 @@ python3 dashboard/server.py 8230               # http://127.0.0.1:8230
 | 9 | Aplicar capa pelo Codex quando permitido | automático | ⚙️ hub · 🤖 Codex |
 | 10 | Acompanhar, pausar, pular ou reenviar | `http://127.0.0.1:8230` | 🧠 Nei |
 | 11 | Alerta de shadowban: ativar por canal e destino, ver as leituras e destravar | painel do canal → linha **Alerta de shadowban** e aba de mesmo nome | 🧠 Nei · ⚙️ hub |
+| 12 | Login próprio do YouTube: copiar uma vez, teste de 6 em 6 h, autenticar de novo quando vencer | `./yt-pub-x3 login copiar` · painel do canal → linha **Login do YouTube** (Testar / Autenticar) | ⚙️ script · ⚙️ hub · 🧠 Nei |
 
 ## O que colocar na pasta
 
@@ -96,7 +97,7 @@ entrada/lives4/2026-11-18-enxame/
 
 | Situação | Resultado |
 |---|---|
-| Login do YouTube caiu | YouTube do canal pausa por 1 h; o vídeo fica na fila; redes seguem |
+| Login do YouTube caiu | YouTube do canal pausa por 1 h; o vídeo fica na fila; redes seguem. O teste de 6 h marca **Vencido** e avisa no v3 |
 | Limite ou cota do YouTube | Igual, com pausa de 6 h |
 | Rede temporária | Até 3 tentativas, depois erro |
 | Queda durante o upload | Vai para **Conferir**; nunca reenvia sozinho |
@@ -119,6 +120,11 @@ Na mesma aba, cada destino ganha um placar em % das views, não em views: compar
 - **RS:** os números vêm da mesma foto do Metricool (curtidas, comentários, compartilhamentos, salvos, alcance); a ordem é por compartilhamento.
 - **YouTube:** usa a leitura de 24 h (curtidas e comentários). Compartilhamentos não vêm na YouTube Data API, só na Analytics, que não está autorizada; a ordem é por curtidas.
 - Só entra o que o alerta leu: o placar existe nos canais com o alerta ativo.
+
+### Login do YouTube
+
+- **Teste:** de 6 em 6 h o hub renova o token de cada canal ativo (sem cota). Só uma recusa do Google (`invalid_grant`, `disabled_client`, `invalid_client`) marca **Vencido**; erro de rede mantém o estado. O aviso no v3 sai só quando muda (venceu ou voltou). `./yt-pub-x3 login testar [canal]` faz o mesmo no terminal.
+- **Autenticar:** o botão abre o Google com a conta do canal sugerida. O retorno registrado nos clientes OAuth é `http://localhost:8090/api/auth/callback`; o x3 não escuta nessa porta, então a página de retorno dá erro ou fica vazia: copie o endereço inteiro da barra e cole na caixa do painel (vale 15 min, uma vez). O x3 troca o código, confere se a conta é a do canal (`destino_id`, 1 unidade de cota) e só então grava o novo `credentials.enc` (o anterior fica em `.bak`). Conta errada não grava nada. Se a pausa do YouTube era de login, ela sai.
 
 ## Testes
 

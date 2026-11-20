@@ -11,6 +11,7 @@ import tempfile
 import threading
 import unittest
 import urllib.error
+import urllib.parse
 import urllib.request
 from datetime import datetime, timedelta
 from unittest import mock
@@ -20,7 +21,7 @@ sys.path.insert(0, RAIZ)
 sys.path.insert(0, os.path.join(RAIZ, 'dashboard'))
 import hub  # noqa: E402
 import server  # noqa: E402
-from lib import canais, cortes, db, entrada, importar, metricool, midia, migrar, painel, runner, vigia, youtube  # noqa: E402
+from lib import canais, cortes, creds, db, entrada, importar, login, metricool, midia, migrar, painel, runner, vigia, youtube  # noqa: E402
 from lib.falhas import AMBIGUO, AUTH, COTA, DEFINITIVO, TEMPORARIO, Falha  # noqa: E402
 
 VERT = (1080, 1920, 55.0)
@@ -32,10 +33,18 @@ class Base(unittest.TestCase):
         self.t = tempfile.mkdtemp(prefix='x3-teste-')
         self.addCleanup(shutil.rmtree, self.t, True)
         amb = {'X3_DB': f'{self.t}/d/x3.db', 'X3_ENTRADA': f'{self.t}/entrada', 'X3_CANAIS': f'{self.t}/canais', 'X3_ACERVO': f'{self.t}/acervo',
-               'X3_RECUSADOS': f'{self.t}/rec', 'X3_HISTORICO_YTPUBX': f'{self.t}/hist.jsonl', 'X3_LEGADO': f'{self.t}/legado', 'X3_PUBLICAR': '1'}
+               'X3_RECUSADOS': f'{self.t}/rec', 'X3_HISTORICO_YTPUBX': f'{self.t}/hist.jsonl', 'X3_LEGADO': f'{self.t}/legado', 'X3_PUBLICAR': '1',
+               'X3_LOGIN_DIR': f'{self.t}/login'}
         p = mock.patch.dict(os.environ, amb)
         p.start()
         self.addCleanup(p.stop)
+
+        def sem_rede(*a, **k):
+            raise AssertionError('teste tentou falar com o Google')
+        for f in ('_renovar', '_trocar_codigo', '_canais_da_conta'):
+            p = mock.patch.object(login, f, sem_rede)
+            p.start()
+            self.addCleanup(p.stop)
         self.dims = {}
         p = mock.patch.object(midia, 'probe', lambda f: self.dims.get(os.path.basename(f), VERT))
         p.start()
@@ -1040,6 +1049,151 @@ class AlertaShadowban(Base):
         e = painel.estado(self.con, canais.carregar())['canais'][0]['vigia']
         self.assertTrue(e['youtube']['ligado'])
         self.assertFalse(e['rs']['ligado'])
+
+
+class Login(Base):
+    """Login próprio: cópia sem tocar a origem, teste de 6 h e nova autorização conferindo a conta."""
+
+    def setUp(self):
+        super().setUp()
+        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+        self.orig = f'{self.t}/antigo/config'
+        os.makedirs(self.orig)
+        self.chave = os.urandom(32)
+        nonce = os.urandom(12)
+        dados = json.dumps({'refresh_token': 'velho'}).encode()
+        arquivos = {'.env': 'CLIENT_ID=cid\nCLIENT_SECRET=seg\nAPI_KEY=k\nGOOGLE_EMAIL=conta@exemplo\n',
+                    '.encryption_key': base64.b64encode(self.chave).decode(), 'prompt_cortes.txt': 'prompt'}
+        for n, v in arquivos.items():
+            with open(f'{self.orig}/{n}', 'w') as f:
+                f.write(v)
+        with open(f'{self.orig}/credentials.enc', 'wb') as f:
+            f.write(nonce + AESGCM(self.chave).encrypt(nonce, dados, None))
+        self.canal(config_dir=self.orig, destino_id='UCcerto')
+        self.avisos = []
+
+    def sha_orig(self):
+        return {n: login._sha(f'{self.orig}/{n}') for n in os.listdir(self.orig)}
+
+    def avisar(self, msg, log=print):
+        self.avisos.append(msg)
+
+    def refresh(self, cfg):
+        return creds.load_refresh_token(cfg)
+
+    def test_copiar_nao_toca_origem_e_aponta_config(self):
+        antes = self.sha_orig()
+        self.assertEqual(login.copiar(canais.carregar()), [('lives3', 'copiado')])
+        dst = f'{self.t}/login/lives3'
+        self.assertEqual(self.c()['config_dir'], dst)
+        self.assertEqual(self.sha_orig(), antes)
+        self.assertEqual(stat.S_IMODE(os.stat(dst).st_mode), 0o700)
+        for n in login.ARQUIVOS + login.EXTRAS:
+            self.assertEqual(stat.S_IMODE(os.stat(f'{dst}/{n}').st_mode), 0o600)
+            self.assertEqual(login._sha(f'{dst}/{n}'), antes[n])
+        self.assertTrue(os.path.isfile(f'{self.t}/canais/lives3.yaml.bak'))
+        self.assertTrue(login.proprio(self.c()))
+        self.assertEqual(login.copiar(canais.carregar()), [('lives3', 'já usa o login próprio')])
+
+    def test_copiar_com_conflito_nao_muda_config(self):
+        os.makedirs(f'{self.t}/login/lives3')
+        with open(f'{self.t}/login/lives3/credentials.enc', 'wb') as f:
+            f.write(b'outro')
+        r = login.copiar(canais.carregar())
+        self.assertIn('diferente', r[0][1])
+        self.assertEqual(self.c()['config_dir'], self.orig)
+
+    def test_testar_estados_e_aviso_so_na_mudanca(self):
+        login.copiar(canais.carregar())
+        c = self.c()
+        with mock.patch.object(login, '_renovar', lambda cfg: 'tok'):
+            self.assertTrue(login.testar(self.con, c, self.avisar).startswith('ok'))
+        self.assertEqual(self.avisos, [])
+        with mock.patch.object(login, '_renovar', mock.Mock(side_effect=urllib.error.URLError('rede'))):
+            self.assertIn('não testado', login.testar(self.con, c, self.avisar))
+        self.assertEqual(login.estado(self.con, 'lives3')['estado'], 'ok')
+        recusa = RuntimeError('refresh_token recusado (400): {"error": "invalid_grant"}')
+        with mock.patch.object(login, '_renovar', mock.Mock(side_effect=recusa)):
+            login.testar(self.con, c, self.avisar)
+            login.testar(self.con, c, self.avisar)
+        self.assertEqual(login.estado(self.con, 'lives3')['estado'], 'vencido')
+        self.assertEqual(len(self.avisos), 1)
+        self.assertIn('VENCIDO', self.avisos[0])
+        db.pausar_destino(self.con, 'lives3', 'youtube', 'login: refresh_token recusado', '2099-01-01 00:00:00')
+        with mock.patch.object(login, '_renovar', lambda cfg: 'tok'):
+            login.testar(self.con, c, self.avisar)
+        self.assertEqual(len(self.avisos), 2)
+        self.assertEqual(db.estado_destino(self.con, 'lives3', 'youtube')['retomar_em'], '')
+
+    def test_iniciar_exige_login_proprio(self):
+        with self.assertRaises(ValueError):
+            login.iniciar(self.con, self.c())
+
+    def _autorizar(self, ids):
+        login.copiar(canais.carregar())
+        url = login.iniciar(self.con, self.c())
+        q = urllib.parse.parse_qs(urllib.parse.urlsplit(url).query)
+        self.assertEqual(q['redirect_uri'], [login.REDIRECT])
+        self.assertEqual(q['login_hint'], ['conta@exemplo'])
+        volta = f"{login.REDIRECT}?state={q['state'][0]}&code=abc&scope=x"
+        troca = mock.Mock(return_value={'access_token': 'a', 'refresh_token': 'novo'})
+        with mock.patch.object(login, '_trocar_codigo', troca), mock.patch.object(login, '_canais_da_conta', lambda t: ids), \
+                mock.patch.object(login, '_renovar', lambda cfg: 'tok'):
+            r = login.colar(self.con, canais.carregar(), volta, self.avisar)
+            again = login.colar(self.con, canais.carregar(), volta, self.avisar)
+        self.assertEqual(troca.call_args[0][1], 'abc')
+        return r, again
+
+    def test_conta_errada_nao_grava(self):
+        antes = self.sha_orig()
+        (ok, msg), _ = self._autorizar(['UCoutro'])
+        self.assertFalse(ok)
+        self.assertIn('não é a do canal', msg)
+        self.assertEqual(self.refresh(self.c()['config_dir']), 'velho')
+        self.assertNotIn('abc', msg)
+        self.assertEqual(self.sha_orig(), antes)
+
+    def test_conta_certa_grava_na_pasta_propria_com_a_mesma_chave(self):
+        antes = self.sha_orig()
+        (ok, msg), (ok2, msg2) = self._autorizar(['UCcerto'])
+        self.assertTrue(ok, msg)
+        dst = self.c()['config_dir']
+        self.assertEqual(self.refresh(dst), 'novo')
+        self.assertEqual(login._sha(f'{dst}/.encryption_key'), antes['.encryption_key'])
+        self.assertEqual(stat.S_IMODE(os.stat(f'{dst}/credentials.enc').st_mode), 0o600)
+        self.assertTrue(os.path.isfile(f'{dst}/credentials.enc.bak'))
+        self.assertEqual(self.refresh(self.orig), 'velho')
+        self.assertEqual(self.sha_orig(), antes)
+        self.assertFalse(ok2)  # o pedido vale uma vez só
+        self.assertIn('vencido ou desconhecido', msg2)
+
+    def test_pedido_vencido(self):
+        login.copiar(canais.carregar())
+        url = login.iniciar(self.con, self.c())
+        st = urllib.parse.parse_qs(urllib.parse.urlsplit(url).query)['state'][0]
+        self.con.execute("UPDATE login_pedidos SET criado_em='2000-01-01 00:00:00'")
+        self.assertFalse(login.concluir(self.con, canais.carregar(), st, 'abc')[0])
+
+    def test_hub_agenda_um_teste_por_bloco_de_6h(self):
+        hub.agendar(self.con, canais.carregar())
+        hub.agendar(self.con, canais.carregar())
+        self.assertEqual(self.con.execute("SELECT COUNT(*) FROM jobs WHERE tipo='login'").fetchone()[0], 1)
+
+    def test_painel_mostra_login_e_retorno_sem_codigo_na_pagina(self):
+        login.copiar(canais.carregar())
+        s = server.criar(0)
+        threading.Thread(target=s.serve_forever, daemon=True).start()
+        self.addCleanup(s.server_close)
+        self.addCleanup(s.shutdown)
+        base = f'http://127.0.0.1:{s.server_address[1]}'
+        e = json.loads(urllib.request.urlopen(base + '/api/estado', timeout=5).read())
+        self.assertTrue(e['canais'][0]['login']['proprio'])
+        r = urllib.request.Request(base + '/api/login/lives3/autenticar', method='POST', headers={'X-X3': '1'})
+        url = json.loads(urllib.request.urlopen(r, timeout=5).read())['url']
+        self.assertTrue(url.startswith(login.AUTH_URL))
+        b = urllib.request.urlopen(base + '/api/login/retorno?state=errado&code=segredo123', timeout=5).read().decode()
+        self.assertIn('Login não renovado', b)
+        self.assertNotIn('segredo123', b)
 
 
 if __name__ == '__main__':

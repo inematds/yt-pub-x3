@@ -10,7 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from lib import VERSION, canais as canais_mod, config, db, runner, vigia  # noqa: E402
+from lib import VERSION, canais as canais_mod, config, db, login, runner, vigia  # noqa: E402
 
 INTERVALO = int(os.environ.get('X3_INTERVALO', '30'))
 TAMANHOS = {'youtube': 2, 'rs': 3, 'cortes': 1, 'geral': 2}
@@ -57,6 +57,8 @@ def agendar(con, canais, simular=False):
         if c['cortes']['ligado'] and c['cortes']['horarios']:
             db.add_job(con, nome, 'sync_lives', db.agora(), chave=f'sync:{nome}:{agora:%Y-%m-%d}')
             _slots(con, nome, 'cortar', c['cortes']['horarios'], {}, 'corte')
+        bloco = agora.hour // login.INTERVALO_H
+        db.add_job(con, nome, 'login', db.agora(), chave=f'login:{nome}:{agora:%Y-%m-%d}:{bloco}')
         if any(vigia.estado(con, nome, d)['ligado'] for d in ('youtube', 'rs')):
             q = agora.minute // vigia.INTERVALO_MIN * vigia.INTERVALO_MIN
             db.add_job(con, nome, 'vigiar', db.agora(), chave=f'vigiar:{nome}:{agora:%Y-%m-%d %H}:{q:02d}')
@@ -65,7 +67,7 @@ def agendar(con, canais, simular=False):
                 continue  # destino pausado: a entrega espera, sem gastar job
             db.add_job(con, nome, 'publicar_entrega', db.agora(), json.dumps({'entrega_id': e['id'], 'destino': e['destino']}),
                        f"ent:{e['id']}:{e['tentativas']}:{e['atualizado_em']}")
-    con.execute("DELETE FROM jobs WHERE tipo IN ('entrada','vigiar') AND status='ok' AND fim_em < datetime('now','localtime','-1 day')")
+    con.execute("DELETE FROM jobs WHERE tipo IN ('entrada','vigiar','login') AND status='ok' AND fim_em < datetime('now','localtime','-1 day')")
 
 
 def _rodar(job_id, canais, simular):
