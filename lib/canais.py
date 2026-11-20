@@ -68,18 +68,24 @@ def definir_horarios(nome, secao, horarios, dir_=None):
 
 
 def definir_config_dir(nome, valor, dir_=None):
-    """Troca só a linha config_dir do arquivo do canal (guarda .bak do anterior)."""
+    definir_campo(nome, 'config_dir', valor, dir_)
+
+
+def definir_campo(nome, campo, valor, dir_=None):
+    """Troca só a linha de um campo de topo do arquivo do canal (guarda .bak do anterior)."""
+    if campo not in BASE or not re.fullmatch(r'[\w./~-]+', valor):
+        raise ValueError('campo ou valor inválido')
     p = os.path.join(dir_ or config.canais_dir(), nome + '.yaml')
     with open(p, encoding='utf-8') as f:
         texto = f.read()
     with open(p + '.bak', 'w', encoding='utf-8') as f:
         f.write(texto)
-    linha = f'config_dir: {valor}'
-    novo, n = re.subn(r'^config_dir:.*$', lambda _: linha, texto, count=1, flags=re.M)
+    linha = f'{campo}: {valor}'
+    novo, n = re.subn(rf'^{campo}:.*$', lambda _: linha, texto, count=1, flags=re.M)
     if not n:
         novo = texto.rstrip('\n') + '\n' + linha + '\n'
-    if (yaml.safe_load(novo) or {}).get('config_dir') != valor:
-        raise ValueError(f'não consegui gravar config_dir em {p}')
+    if str((yaml.safe_load(novo) or {}).get(campo)) != valor:
+        raise ValueError(f'não consegui gravar {campo} em {p}')
     tmp = f'{p}.{os.getpid()}.tmp'
     with open(tmp, 'w', encoding='utf-8') as f:
         f.write(novo)

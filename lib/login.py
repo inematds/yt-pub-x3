@@ -183,8 +183,9 @@ def iniciar(con, c):
     return f'{AUTH_URL}?{urllib.parse.urlencode(p)}'
 
 
-def _esperado(c, env):
-    return (c.get('destino_id') or env.get('YOUTUBE_CHANNEL_ID') or '').strip()
+def _esperado(c, env=None):
+    # Só o destino_id do canal: o YOUTUBE_CHANNEL_ID dos .env antigos foi copiado entre instâncias e não é confiável.
+    return (c.get('destino_id') or '').strip()
 
 
 def _trocar_codigo(env, code):
