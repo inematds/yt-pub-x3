@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS vigia_leituras (
 CREATE INDEX IF NOT EXISTS idx_vigia_leituras ON vigia_leituras(canal, destino, etapa);
 """
 
-PADRAO = {'limite_yt': 20, 'espera_yt': 60, 'limite_rs': 20, 'espera_rs': 24, 'seguidos': 2, 'auto_pausa': False}
+PADRAO = {'limite_yt': 20, 'espera_yt': 120, 'limite_rs': 20, 'espera_rs': 24, 'seguidos': 2, 'auto_pausa': False}
 FAIXAS = {'limite_yt': (0, 100000), 'espera_yt': (15, 1440), 'limite_rs': (0, 100000), 'espera_rs': (12, 72), 'seguidos': (1, 10)}
 DESISTE_H = 96          # post que não deu para ler em 4 dias sai da conferência
 INTERVALO_MIN = 15      # o hub agenda uma conferência por canal a cada 15 min

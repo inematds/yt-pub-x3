@@ -2,6 +2,7 @@
 
 | data | o que quebrou | menor correção | prompt \| infra |
 |---|---|---|---|
+| 20/11/2026 | Alerta de shadowban travou 12 canais do YouTube (até o lives1, de 14,5 mil inscritos): lia as views com 60 min e limite de 20, cedo demais para Short novo | `espera_yt` padrão 60 → 120; leituras antigas marcadas `_60min` (fora da sequência) e canais destravados; backup `data/x3.db.bak-20261120-vigia` | prompt |
 | 19/11/2026 | Short do Gemini 4 (item 3629) saiu às 03:14 e o explicativo (3633) estava marcado para 04:15 no lives4/inema.tds, fora dos horários: a sessão de produção usou `--quando agora`/hora fixa, como o PRODUCAO.md manda para explicavideo | Item 3633 para `fila`; v0.3.0: `agora` vira `fila` na entrada (Nei: tudo entra na fila) | prompt |
 | 18/11/2026 | Migração tratou como pendentes itens já publicados, porque o antigo grava `filename` em dois formatos; 414 saíram da fila antes de qualquer envio | Casar clip_id, arquivo e título, e exigir `clips_pendentes` | prompt |
 | 18/11/2026 | Painel contava agendados como publicados e vídeos removidos na linha yt-pubx | Separar `pub` de `ag` e ignorar registros com `removido`, com teste | prompt |
