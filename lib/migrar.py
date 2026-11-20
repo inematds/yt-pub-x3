@@ -42,17 +42,23 @@ def situacao(clipe, vid, por_live, titulos_ok):
     return 'erro' if achados else 'pendente'
 
 
-def selecionar(nome, lives_dir, clipes_pendentes=False, clipes_erro=False, imports_erro=False, imports_pendentes=False):
-    """Devolve (lista de clipes escolhidos, contagem do que ficou de fora)."""
+def selecionar(nome, lives_dir, clipes_pendentes=False, clipes_erro=False, imports_erro=False, imports_pendentes=False, orfaos_desde=''):
+    """Devolve (lista de clipes escolhidos, contagem do que ficou de fora).
+
+    orfaos_desde: live cortada pelo antigo a partir desta data e sem nenhum clipe publicado conta como pendente mesmo
+    com clips_pendentes=0 (o antigo parou de publicar em 17/11/2026 e deixou os cortes novos sem pendência)."""
     arq = os.path.join(config.legado_dir(), f'yt-pub-{nome}', 'data', 'lives.db')
     con = sqlite3.connect(f'file:{arq}?mode=ro', uri=True, timeout=5)
     try:
         por_live, titulos_ok = _registros(con)
-        lives = con.execute('SELECT video_id, titulo, clips_pendentes FROM lives ORDER BY rowid').fetchall()
+        cols = {r[1] for r in con.execute('PRAGMA table_info(lives)')}
+        extra = ', '.join(c if c in cols else d for c, d in (('data_corte', "''"), ('clips_publicados', '0')))
+        lives = con.execute(f'SELECT video_id, titulo, clips_pendentes, {extra} FROM lives ORDER BY rowid').fetchall()
     finally:
         con.close()
     escolhidos, fora = [], collections.Counter()
-    for vid, titulo, pendentes in lives:
+    for vid, titulo, pendentes, data_corte, publicados in lives:
+        orfa = bool(orfaos_desde) and str(data_corte) >= orfaos_desde and not int(publicados or 0)
         importado = str(vid).startswith('import_')
         tiktok = importado and str(titulo or '').startswith('TikTok @')
         try:
@@ -65,7 +71,7 @@ def selecionar(nome, lives_dir, clipes_pendentes=False, clipes_erro=False, impor
             st = situacao(c, vid, por_live, titulos_ok)
             if st == 'indefinido':
                 fora['envio indefinido'] += 1
-            if st == 'pendente' and not int(pendentes or 0):
+            if st == 'pendente' and not int(pendentes or 0) and not orfa:
                 fora['sem pendência no sistema antigo'] += 1
                 continue
             pend, erro = (imports_pendentes, imports_erro) if importado else (clipes_pendentes, clipes_erro)

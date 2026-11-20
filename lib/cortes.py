@@ -8,6 +8,7 @@ from datetime import datetime
 from . import config, db, entrada, midia, youtube
 
 TEMPO = 4 * 3600
+ORFAOS_DESDE = '2026-11-17'   # o agendador antigo publicou o último clipe em 17/11/2026 18:15
 
 
 def importar_historico(con, canal):
@@ -83,6 +84,17 @@ def _enfileirar_clipes(con, canal, video_id, manifesto):
         entrada.criar_entregas(con, item_id, canal, ['youtube', 'rs'])
         n += 1
     return n
+
+
+def absorver_antigo(con, canal):
+    """Clipes que o agendador antigo cortou e não publicou entram na fila deste canal (Nei 20/11/2026: "quero os cortes
+    do lives1 acontecendo"; o antigo segue cortando, mas desde 17/11 não publica). Repetir não duplica."""
+    from . import migrar
+    try:
+        clipes, _ = migrar.selecionar(canal['nome'], canal['lives_dir'], clipes_pendentes=True, orfaos_desde=ORFAOS_DESDE)
+    except sqlite3.Error:
+        return 0
+    return migrar.enfileirar(con, canal, clipes)[0] if clipes else 0
 
 
 def cortar_proxima(con, canal, cortar=None, log=print):

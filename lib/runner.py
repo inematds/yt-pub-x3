@@ -195,6 +195,8 @@ def executar(con, job, canais, simular, log=print):
             r = 'simulado' if simular else f'{cortes.sincronizar(con, canal, LISTAR_LIVES)} nova(s)'
         elif t == 'cortar':
             r = 'simulado' if simular else cortes.cortar_proxima(con, canal, CORTAR, log)
+            if not simular and os.path.exists(os.path.join(config.legado_dir(), f"yt-pub-{canal['nome']}", 'data', 'lives.db')):
+                r += f' · {cortes.absorver_antigo(con, canal)} clipe(s) do antigo na fila'
         elif t == 'capas_gerar':
             r = capas_clipes.gerar(con, canal, simular, log)
         elif t == 'capas_subir':
