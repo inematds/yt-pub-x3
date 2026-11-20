@@ -15,6 +15,7 @@ from datetime import datetime
 HOME = os.path.expanduser('~')
 RADAR = os.path.join(HOME, 'projetos', 'radar-viral', 'radar.json')
 IMERSAO = os.path.join(HOME, 'projetos', 'imersao2026', 'diaria', 'config.py')
+PLACAR = os.path.join(HOME, '.local', 'share', 'inema', 'rodadas.jsonl')  # wifi/scripts/rodada: início e fim de cada rodada
 
 # timers: [(timer, rótulo)] · canais: [(canal, o que chega lá)] · tipo: agenda | pedido | pauta
 CATALOGO = [
@@ -165,10 +166,31 @@ def _imersao():
         return [], '16:00'
 
 
-def ler(canais_cfg=None, props=None):
+def _placar(caminho=PLACAR):
+    """Último 'fim' de cada unidade no placar da máquina (resultado, motivo, quando)."""
+    ult = {}
+    try:
+        with open(caminho, encoding='utf-8', errors='replace') as f:
+            linhas = f.readlines()[-5000:]
+    except OSError:
+        return ult
+    for l in linhas:
+        try:
+            d = json.loads(l)
+        except ValueError:
+            continue
+        if d.get('fase') in ('fim', 'retificacao') and d.get('unidade'):  # retificação = conferência posterior (ex.: saiu depois no x3)
+            ult[d['unidade']] = {'quando': (d.get('ts') or '')[:16].replace('T', ' '), 'resultado': d.get('resultado') or '',
+                                 'motivo': (d.get('motivo') or '')[:400], 'url': d.get('url') or ''}
+    return ult
+
+
+def ler(canais_cfg=None, props=None, placar=None):
     todos = [t for g in CATALOGO for t, _ in g['timers']]
     props = _show(todos) if props is None else props
     radar, (im_canais, im_hora) = _radar(), _imersao()
+    placar = _placar() if placar is None else placar
+    falhas = []
     titulos = {n: (c.get('destino_nome') or '') for n, c in (canais_cfg or {}).items()}
     geradores, por_canal, grade = [], {}, []
     for g in CATALOGO:
@@ -190,7 +212,16 @@ def ler(canais_cfg=None, props=None):
                               'habilitado': (d.get('UnitFileState') or [''])[0], 'agenda': _agenda(d),
                               'proximo': _quando((d.get('NextElapseUSecRealtime') or [''])[0]),
                               'ultimo': _quando((d.get('LastTriggerUSec') or [''])[0]),
-                              'resultado': sv.get('Result', ''), 'rodando': sv.get('ActiveState') in ('activating', 'active')})
+                              'resultado': sv.get('Result', ''), 'rodando': sv.get('ActiveState') in ('activating', 'active'),
+                              'placar': placar.get(t)})
+            e = execucoes[-1]
+            pl = e['placar'] or {}
+            if not e['rodando'] and (pl.get('resultado') == 'falhou' or (e['resultado'] and e['resultado'] != 'success')):
+                e['falhou'] = True
+                falhas.append({'gerador': g['nome'], 'id': g['id'], 'timer': t, 'rotulo': rotulo,
+                               'quando': pl.get('quando') if pl.get('resultado') == 'falhou' else e['ultimo'],
+                               'motivo': pl.get('motivo') if pl.get('resultado') == 'falhou' else f"systemd: {e['resultado']} (ver journalctl --user -u {t})",
+                               'canais': [c for c, _ in canais]})
         item = {'id': g['id'], 'nome': g['nome'], 'projeto': g['projeto'], 'tipo': g['tipo'], 'nota': g['nota'],
                 'canais': [{'canal': c, 'titulo': titulos.get(c, ''), 'o_que': o} for c, o in canais],
                 'execucoes': execucoes, 'ligado': ligados > 0}
@@ -213,5 +244,6 @@ def ler(canais_cfg=None, props=None):
         pc['itens'].sort(key=lambda i: i['horas'][0] if i['horas'] else '')
     return {'agora': datetime.now().strftime('%Y-%m-%d %H:%M'),
             'geradores': geradores,
+            'falhas': sorted(falhas, key=lambda f: f['quando'] or '', reverse=True),
             'grade': sorted(grade, key=lambda x: (x['hora'], x['gerador'])),
             'por_canal': [por_canal[k] for k in sorted(por_canal, key=lambda c: int(c[5:]))]}
