@@ -15,6 +15,7 @@ Quando for corrigido ou notar um erro seu, antes de continuar acrescente a liç�
 
 ## Lessons
 
+- Mudança de estado em lote no banco: limitar a itens já publicados ou contar antes. Marcar "sem capa" pegou 847 itens ainda na fila, que precisaram voltar. (20/11/2026)
 - OAuth: não supor o tipo de cliente pelo client_secret.json de alguns canais. 16 dos 17 são "web" e só aceitam o retorno do painel antigo (8090). Testar a URL de autorização em todos antes. O YOUTUBE_CHANNEL_ID dos .env antigos foi copiado entre instâncias: conferir a conta só pelo destino_id. (20/11/2026)
 - Painel: cortes de lives estão desligados nos canais; não montar caixa "Clips" com eles. Usar a publicação de clipes (`clipes.horarios`); leitura ainda a confirmar com o Nei. (18/11/2026)
 - Pendência nos `yt-pub-livesN`: `publicados.filename` pode ser clip_id ou nome do arquivo. Conferir os dois, o título e `clips_pendentes` antes de enfileirar. (18/11/2026)

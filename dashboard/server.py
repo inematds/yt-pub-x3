@@ -120,6 +120,10 @@ class Painel(BaseHTTPRequestHandler):
                 else:
                     vigia.ligar(con, m.group(1), m.group(2), m.group(3) == 'ligar')
                 return self._json(200, {'ok': True})
+            m = re.fullmatch(r'/api/capa/([\w-]+)/tentar', self.path)
+            if m and m.group(1) in canais_mod.carregar():
+                db.definir_capa_permissao(con, m.group(1), '')  # volta a tentar na próxima capa
+                return self._json(200, {'ok': True})
             m = re.fullmatch(r'/api/login/([\w-]+)/(testar|autenticar)', self.path)
             cs = canais_mod.carregar() if m or self.path == '/api/login/colar' else {}
             if m and m.group(1) in cs:

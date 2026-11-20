@@ -35,6 +35,8 @@ CREATE TABLE IF NOT EXISTS jobs (
   payload TEXT NOT NULL DEFAULT '{}', run_at TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pendente',
   resultado TEXT NOT NULL DEFAULT '', criado_em TEXT NOT NULL, inicio_em TEXT NOT NULL DEFAULT '', fim_em TEXT NOT NULL DEFAULT '');
 CREATE INDEX IF NOT EXISTS idx_jobs ON jobs(status, run_at);
+CREATE TABLE IF NOT EXISTS capa_canal (
+  canal TEXT PRIMARY KEY, permissao TEXT NOT NULL DEFAULT '', msg TEXT NOT NULL DEFAULT '', em TEXT NOT NULL DEFAULT '');
 """
 
 ACOES = {
@@ -144,6 +146,17 @@ def pausar_destino(con, canal, destino, motivo, retomar_em):
     _garante(con, canal, destino)
     con.execute('UPDATE canal_destino SET pausa_motivo=?, retomar_em=? WHERE canal=? AND destino=?',
                 (motivo[:300], retomar_em, canal, destino))
+
+
+def capa_permissao(con, canal):
+    """'sim', 'nao' ou '' (ainda não se sabe se o YouTube aceita capa personalizada no canal)."""
+    r = con.execute('SELECT permissao FROM capa_canal WHERE canal=?', (canal,)).fetchone()
+    return r['permissao'] if r else ''
+
+
+def definir_capa_permissao(con, canal, permissao, msg=''):
+    con.execute('INSERT INTO capa_canal(canal,permissao,msg,em) VALUES(?,?,?,?) ON CONFLICT(canal) DO UPDATE SET '
+                'permissao=excluded.permissao, msg=excluded.msg, em=excluded.em', (canal, permissao, msg[:300], agora()))
 
 
 def limpar_pausa(con, canal, destino):

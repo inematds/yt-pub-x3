@@ -48,7 +48,7 @@ python3 dashboard/server.py 8230               # http://127.0.0.1:8230
 
 **Cortes.** `scripts/yt-clip` usa `yt-dlp`, `ffmpeg`, o motor de `scripts/ia.yaml` e `prompt_cortes.txt` no `config_dir`. Usa `fila-vaga` só se ele existir.
 
-**Capa e textos por IA** usam o `yt-pubx` local (`scripts/ia_ytpubx.py`). Sem ele, informe os textos no `post.json` e coloque `capa.jpg` na pasta. Os avisos usam `avisa-v3.sh` na máquina INEMA; em outra, ficam no log e no painel.
+**Textos por IA** usam o `yt-pubx` local (`scripts/ia_ytpubx.py`). **Capa** é a thumb viral do Codex image_gen (`thumbviral.py`, caminho em `X3_THUMBVIRAL`): 1280x720, o Codex escolhe o gancho e o desenha dentro da arte, com estilo sorteado; não há texto por cima nem imagem reserva. Só vídeo deitado leva capa (Short não), e só em canal onde o YouTube permite capa personalizada: o primeiro 403 marca o canal como "sem permissão" e o x3 para de gerar ali (o painel tem "Tentar de novo"). Sem IA, informe os textos no `post.json` e coloque `capa.jpg` na pasta. Os avisos usam `avisa-v3.sh` na máquina INEMA; em outra, ficam no log e no painel.
 
 **Serviços** de exemplo em `systemd/`. Eles não ligam a publicação real. Para levar clipes de instâncias antigas a outro canal: `./yt-pub-x3 migrar-clipes lives3 --para lives23 --clipes-pendentes --clipes-erro --imports-erro` mostra a prévia, e `--aplicar` põe na fila.
 
@@ -104,6 +104,7 @@ entrada/lives4/2026-11-18-enxame/
 | Vídeo 16:9 com 3 min ou mais, ou vertical longo demais | Redes ficam como **Ignorado** |
 | Arquivo repetido ou pasta inválida | **Recusado**, com o motivo, em `data/recusados/` |
 | Codex não fez a capa | Vídeo sai sem capa e o painel marca pendente |
+| YouTube recusa capa personalizada no canal (403) | Canal marcado "sem permissão"; o x3 não gasta mais Codex com capa ali |
 | Post com poucas views (alerta de shadowban ativo) | Aviso no v3. Com N posts baixos seguidos o destino fica **Travado**; só para de publicar se a pausa automática estiver ligada; destravar é manual no painel |
 
 ### Alerta de shadowban

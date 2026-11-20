@@ -216,7 +216,7 @@ def estado(con, canais):
         out.append({'nome': n, 'titulo': c['destino_nome'] or 'Sem nome salvo', 'url': c['url'], 'ativo': c['ativo'], 'migrado_em': c['migrado_em'],
                     'youtube': c['youtube'], 'clipes': c['clipes'], 'rs': c['rs'], 'rs_herda': c['rs_herda'], 'cortes': c['cortes'], 'destinos': destinos, 'legado': v, 'serie': serie,
                     'vagas': s, 'semana': sem, 'recibos': lg['recibos'].get(c['rs']['blog_id'], 0), 'vigia': vigia.resumo(con, n),
-                    'login': {**login.estado(con, n), 'proprio': login.proprio(c)}})
+                    'login': {**login.estado(con, n), 'proprio': login.proprio(c)}, 'capa': db.capa_permissao(con, n)})
     return {'versao': VERSION, 'publicando': config.publicar_de_verdade(), 'agora': db.agora(), 'dias': lg['dias'], 'dias_serie': dias_serie, 'canais': out,
             'recusados': [dict(r) for r in con.execute('SELECT * FROM recusados ORDER BY id DESC LIMIT 30')]}
 

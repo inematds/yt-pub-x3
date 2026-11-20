@@ -297,6 +297,33 @@ class Capa(Base):
             runner.fazer_capa(self.con, self.c(), 1, False, lambda m: None)
         d.assert_called_once()
         self.assertEqual(db.item(self.con, 1)['capa_status'], 'aplicada')
+        self.assertEqual(db.capa_permissao(self.con, 'lives3'), 'sim')
+
+    def test_canal_sem_permissao_para_de_gerar(self):
+        self._pub()
+        recusa = Falha('HTTP 403: The authenticated user doesn\'t have permissions to upload and set custom video thumbnails.', DEFINITIVO)
+        gera = mock.Mock(return_value='c.jpg')
+        with mock.patch.object(runner, 'gerar_capa', gera), mock.patch.object(runner, 'definir_capa', side_effect=recusa):
+            self.assertEqual(runner.fazer_capa(self.con, self.c(), 1, False, lambda m: None), 'canal sem permissão de capa')
+            self.assertEqual(db.item(self.con, 1)['capa_status'], 'nao_leva')
+            self.assertEqual(db.capa_permissao(self.con, 'lives3'), 'nao')
+            self.con.execute("UPDATE itens SET capa_status='a_gerar' WHERE id=1")
+            runner.fazer_capa(self.con, self.c(), 1, False, lambda m: None)
+        self.assertEqual(gera.call_count, 1)  # na segunda vez nem chama o Codex
+
+    def _gerador(self, cria):
+        s = f'{self.t}/thumbviral.py'
+        with open(s, 'w') as f:
+            f.write('import json, os, sys\nsaida, pedido = sys.argv[1], sys.argv[2]\n'
+                    'assert json.load(open(pedido))[0]["titulo"] == "Titulo"\n'
+                    + ('open(os.path.join(saida, "capa.jpg"), "w").write("x")\n' if cria else 'print("FALHOU")\n'))
+        return mock.patch.dict(os.environ, {'X3_THUMBVIRAL': s})
+
+    def test_gerar_capa_usa_o_thumbviral_do_codex(self):
+        with self._gerador(True):
+            self.assertEqual(runner.gerar_capa('lives3', 'Titulo', 'D', f'{self.t}/p'), f'{self.t}/p/capa-x3/capa.jpg')
+        with self._gerador(False), self.assertRaises(RuntimeError):
+            runner.gerar_capa('lives3', 'Titulo', 'D', f'{self.t}/q')
 
 
 class Cortes(Base):

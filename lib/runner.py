@@ -8,6 +8,8 @@ from . import config, cortes, db, entrada, ia, login, metricool, vigia, youtube
 from .falhas import AMBIGUO, AUTH, COTA, DEFINITIVO, FORMATO, Falha
 
 PAUSA = {AUTH: timedelta(hours=1), COTA: timedelta(hours=6)}
+RECUSA_CAPA = 'permissions to upload and set custom'   # texto do 403 do YouTube em canal sem capa personalizada
+SEM_CAPA = 'Canal sem permissão de capa personalizada no YouTube'
 FAIXAS = {'publicar': None, 'publicar_entrega': None, 'entrada': 'geral', 'capa': 'geral', 'sync_lives': 'geral', 'cortar': 'cortes', 'vigiar': 'geral', 'login': 'geral'}
 
 
@@ -118,12 +120,21 @@ def fazer_capa(con, canal, item_id, simular, log=print):
         return 'vídeo ainda não publicado'
     if simular:
         return 'simulado'
+    if db.capa_permissao(con, canal['nome']) == 'nao':
+        con.execute("UPDATE itens SET capa_status='nao_leva', capa_motivo=? WHERE id=?", (SEM_CAPA, item_id))
+        return 'canal sem permissão de capa'
     try:
         capa = it['capa'] or gerar_capa(canal['nome'], it['titulo'], it['descricao'], it['pasta'])
         definir_capa(e['ref'], capa, canal['config_dir'])
         con.execute("UPDATE itens SET capa=?, capa_status='aplicada', capa_motivo='' WHERE id=?", (capa, item_id))
+        db.definir_capa_permissao(con, canal['nome'], 'sim')
         return 'capa aplicada'
     except Exception as x:
+        if RECUSA_CAPA in str(x):
+            db.definir_capa_permissao(con, canal['nome'], 'nao', str(x))
+            con.execute("UPDATE itens SET capa_status='nao_leva', capa_motivo=? WHERE id=?", (SEM_CAPA, item_id))
+            avisar(f"{canal['nome']}: o YouTube não permite capa personalizada neste canal; o x3 deixa de gerar capa nele.", log)
+            return 'canal sem permissão de capa'
         con.execute("UPDATE itens SET capa_status='pendente', capa_motivo=? WHERE id=?", (str(x)[:300], item_id))
         avisar(f"{canal['nome']}: vídeo publicado sem capa ({it['titulo'][:50]}).", log)
         return 'capa pendente'
