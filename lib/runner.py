@@ -4,13 +4,13 @@ import os
 import subprocess
 from datetime import datetime, timedelta
 
-from . import config, cortes, db, entrada, ia, login, metricool, vigia, youtube
+from . import config, cortes, db, enriquecer, entrada, ia, login, metricool, vigia, youtube
 from .falhas import AMBIGUO, AUTH, COTA, DEFINITIVO, FORMATO, Falha
 
 PAUSA = {AUTH: timedelta(hours=1), COTA: timedelta(hours=6)}
 RECUSA_CAPA = 'permissions to upload and set custom'   # texto do 403 do YouTube em canal sem capa personalizada
 SEM_CAPA = 'Canal sem permissão de capa personalizada no YouTube'
-FAIXAS = {'publicar': None, 'publicar_entrega': None, 'entrada': 'geral', 'capa': 'geral', 'sync_lives': 'geral', 'cortar': 'cortes', 'vigiar': 'geral', 'login': 'geral'}
+FAIXAS = {'publicar': None, 'publicar_entrega': None, 'entrada': 'geral', 'capa': 'geral', 'sync_lives': 'geral', 'cortar': 'cortes', 'vigiar': 'geral', 'login': 'geral', 'enriquecer': 'geral'}
 
 
 def pub_youtube(canal, item, log=print):
@@ -165,6 +165,9 @@ def executar(con, job, canais, simular, log=print):
         if t in ('sync_lives', 'cortar') and not canal['cortes']['ligado']:
             db.fim_job(con, job['id'], True, 'cortes desligados')
             return 'cortes desligados'
+        if t == 'enriquecer' and not canal['enriquecer']['ligado']:
+            db.fim_job(con, job['id'], True, 'enriquecimento desligado')
+            return 'enriquecimento desligado'
         if t == 'entrada':
             r = f'{entrada.varrer(con, canal, log, ESCREVER, simular)} novo(s)'
         elif t == 'publicar':
@@ -189,6 +192,8 @@ def executar(con, job, canais, simular, log=print):
             r = 'simulado' if simular else f'{cortes.sincronizar(con, canal, LISTAR_LIVES)} nova(s)'
         elif t == 'cortar':
             r = 'simulado' if simular else cortes.cortar_proxima(con, canal, CORTAR, log)
+        elif t == 'enriquecer':
+            r = 'simulado' if simular else enriquecer.executar(con, canal, False, log)
         else:
             raise RuntimeError(f'job desconhecido: {t}')
         db.fim_job(con, job['id'], True, r)

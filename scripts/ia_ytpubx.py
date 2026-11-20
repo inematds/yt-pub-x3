@@ -23,7 +23,10 @@ modelo = cfg.get('codex_modelo', '')
 pasta = p.get('pasta') or os.getcwd()
 
 # A capa saiu daqui (v0.7.0): é a thumb viral do Codex em lib/ia.py, com o texto desenhado na arte.
-if p['tipo'] in ('foto', 'carrossel'):
+if p.get('acao') == 'enriquecer':
+    txt = yp.codex(p['contexto'], pasta, modelo)
+    print(json.dumps(json.loads(re.search(r'\{.*\}', txt, re.S).group(0)), ensure_ascii=False))
+elif p['tipo'] in ('foto', 'carrossel'):
     txt = yp.codex('Escreva o post de rede social em português do Brasil. Responda SOMENTE JSON com "titulo" (até 90 '
                    'caracteres) e "texto_rs" (até 900 caracteres, sem links, termina com 3 a 5 hashtags).\n\nContexto:\n'
                    + p['contexto'], pasta, modelo)

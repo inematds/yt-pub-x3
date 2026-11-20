@@ -21,7 +21,12 @@ def escrever_textos(canal, tipo, contexto, arquivo='', titulo='', descricao=''):
                     'titulo': titulo, 'descricao': descricao})
 
 
-THUMBVIRAL = '~/projetos/output/thumbviral/thumbviral.py'
+def enriquecer_live(canal, pedido):
+    """{'title','description'} pelo Codex; o pedido (prompt + transcrição) vai pelo stdin, nunca como argumento."""
+    return _chamar({'acao': 'enriquecer', 'canal': canal, 'tipo': 'live', 'contexto': pedido})
+
+
+THUMBVIRAL ='~/projetos/output/thumbviral/thumbviral.py'
 
 
 def gerar_capa(canal, titulo, descricao, pasta):

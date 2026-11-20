@@ -69,6 +69,7 @@ python3 dashboard/server.py 8230               # http://127.0.0.1:8230
 | 11 | Alerta de shadowban: ativar por canal e destino, ver as leituras e destravar | painel do canal → linha **Alerta de shadowban** e aba de mesmo nome | 🧠 Nei · ⚙️ hub |
 | 12 | Login próprio do YouTube: copiar uma vez, teste de 6 em 6 h, autenticar de novo quando vencer | `./yt-pub-x3 login copiar` · painel do canal → linha **Login do YouTube** (Testar / Autenticar) | ⚙️ script · ⚙️ hub · 🧠 Nei |
 | 13 | Conferir se o catálogo do site leu o que o x3 publicou (o sync lê o `x3.db` só para leitura) | tela geral do painel → linha **Catálogo do site** | ⚙️ script · 🧠 Nei |
+| 14 | Enriquecer lives: título genérico ganha título, descrição e capa (Codex); live sem descrição ganha só a descrição. Desligado por padrão (`enriquecer: {ligado: true, horarios: [...], max_por_vez: 3}` no YAML do canal) | `./yt-pub-x3 enriquecer <canal>` (prévia) · `X3_PUBLICAR=1 ./yt-pub-x3 enriquecer <canal> --aplicar` | ⚙️ hub · 🧠 Nei liga |
 
 ## O que colocar na pasta
 

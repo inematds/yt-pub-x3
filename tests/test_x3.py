@@ -21,7 +21,7 @@ sys.path.insert(0, RAIZ)
 sys.path.insert(0, os.path.join(RAIZ, 'dashboard'))
 import hub  # noqa: E402
 import server  # noqa: E402
-from lib import canais, cortes, creds, db, entrada, importar, login, metricool, midia, migrar, painel, runner, vigia, youtube  # noqa: E402
+from lib import canais, cortes, creds, db, enriquecer, entrada, importar, login, metricool, midia, migrar, painel, runner, vigia, youtube  # noqa: E402
 from lib.falhas import AMBIGUO, AUTH, COTA, DEFINITIVO, TEMPORARIO, Falha  # noqa: E402
 
 VERT = (1080, 1920, 55.0)
@@ -371,6 +371,77 @@ class Cortes(Base):
             raise RuntimeError('falhou')
         cortes.cortar_proxima(self.con, self.c(), ruim)
         self.assertEqual(self.con.execute('SELECT status FROM lives').fetchone()[0], 'erro')
+
+
+class Enriquecer(Base):
+    """Enriquecimento das lives, só com YouTube e IA falsos."""
+
+    def setUp(self):
+        super().setUp()
+        self.canal(enriquecer={'ligado': True, 'horarios': [self.hm], 'max_por_vez': 2})
+        os.makedirs(f'{self.t}/legado/yt-pub-lives3/config')
+        open(f'{self.t}/legado/yt-pub-lives3/config/prompt_enrich.txt', 'w').write('PROMPT DO CANAL')
+        self.snip = {'A': {'title': 'INEMA', 'description': ''}, 'B': {'title': 'Live boa', 'description': ''},
+                     'C': {'title': 'Live boa', 'description': 'tem'}, 'D': {'title': ''}}
+        self.lives = [{'video_id': v, 'titulo': self.snip[v].get('title', ''), 'data_live': '2026-11-19'} for v in 'ABCD'] + \
+                     [{'video_id': 'Z', 'titulo': 'INEMA', 'data_live': '2026-11-19'}]  # Z não é do canal
+        for v in 'ABC':
+            os.makedirs(f'{self.t}/lives/{v}')
+            open(f'{self.t}/lives/{v}/condensed.txt', 'w').write('x' * 200000)
+        self.feito, self.capas, self.pedidos = [], [], []
+
+    def rodar(self, simular=False, falha_capa=False):
+        def capa(canal, t, d, pasta):
+            if falha_capa:
+                raise RuntimeError('codex fora')
+            return 'capa.jpg'
+        return enriquecer.executar(
+            self.con, self.c(), simular, lambda *a: None,
+            listar=lambda o, cfg, n: self.lives, ler=lambda ids, cfg: {i: self.snip[i] for i in ids if i in self.snip},
+            escrever=lambda c, p: self.pedidos.append(p) or {'title': 'LIVE: Novo', 'description': 'Desc'},
+            capa=capa, atualizar=lambda v, t, d, cfg: self.feito.append((v, t, d)),
+            definir_capa=lambda v, f, cfg: self.capas.append(v))
+
+    def test_candidatos(self):
+        m = {l['video_id']: modo for l, modo in enriquecer.candidatos(self.con, self.c(), lambda o, cfg, n: self.lives,
+                                                                      lambda ids, cfg: {i: self.snip[i] for i in ids if i in self.snip})}
+        self.assertEqual(m, {'A': 'tudo', 'B': 'descricao', 'D': 'tudo'})
+
+    def test_simulacao_nao_muda_nada(self):
+        r = self.rodar(simular=True)
+        self.assertIn('A (tudo)', r)
+        self.assertNotIn('D', r)  # sem transcrição: espera o corte
+        self.assertEqual((self.feito, self.capas), ([], []))
+
+    def test_enriquece_e_nao_refaz(self):
+        self.rodar()
+        self.assertEqual(self.feito, [('A', 'LIVE: Novo', 'Desc'), ('B', '', 'Desc')])  # B mantém o título
+        self.assertEqual(self.capas, ['A'])
+        self.assertTrue(all(p.startswith('PROMPT DO CANAL') for p in self.pedidos))
+        self.assertLess(max(len(p) for p in self.pedidos), enriquecer.LIMITE_TRANSCRICAO + 2000)
+        self.feito.clear()
+        self.assertEqual(self.rodar(), 'nada a enriquecer')
+        self.assertEqual(self.feito, [])
+
+    def test_capa_falhando_nao_desfaz_texto(self):
+        r = self.rodar(falha_capa=True)
+        self.assertIn('capa falhou', r)
+        self.assertEqual(len(self.feito), 2)
+        st = self.con.execute("SELECT status FROM enriquecidas WHERE video_id='A'").fetchone()[0]
+        self.assertEqual(st, 'feito')
+
+    def test_desligado_nao_roda(self):
+        self.canal(enriquecer={'ligado': False})
+        db.add_job(self.con, 'lives3', 'enriquecer', db.agora(), chave='e1')
+        job = self.con.execute("SELECT * FROM jobs WHERE chave='e1'").fetchone()
+        self.assertEqual(runner.executar(self.con, job, canais.carregar(), False), 'enriquecimento desligado')
+
+    def test_hub_agenda_so_ligado(self):
+        hub.agendar(self.con, canais.carregar())
+        self.assertEqual(self.con.execute("SELECT COUNT(*) FROM jobs WHERE tipo='enriquecer'").fetchone()[0], 1)
+        self.canal(enriquecer={'ligado': False, 'horarios': [self.hm]})
+        hub.agendar(self.con, canais.carregar())
+        self.assertEqual(self.con.execute("SELECT COUNT(*) FROM jobs WHERE tipo='enriquecer' AND status='pendente'").fetchone()[0], 0)
 
 
 class Revisao(Base):

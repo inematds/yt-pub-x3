@@ -25,3 +25,8 @@ cortes:
   horarios: ["01:35"]
   max_por_dia: 1
   ai_modo: claude-api    # o motor real fica em scripts/ia.yaml
+enriquecer:              # lives com título genérico: título, descrição e capa; sem descrição: só a descrição
+  ligado: false
+  horarios: ["02:00", "04:00"]
+  max_por_vez: 3
+  prompt: ''             # vazio = config/prompt_enrich.txt do agendador antigo do canal

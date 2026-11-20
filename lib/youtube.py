@@ -111,6 +111,31 @@ def definir_capa(video_id, capa, config_dir):
                                  headers={'Authorization': f'Bearer {token}', 'Content-Type': tipo}), timeout=120)
 
 
+def snippets(ids, config_dir):
+    """{video_id: snippet} dos vídeos do canal logado (videos.list, 50 por chamada)."""
+    token = _token(config_dir)
+    out = {}
+    for i in range(0, len(ids), 50):
+        q = urllib.parse.urlencode({'part': 'snippet', 'id': ','.join(ids[i:i + 50])})
+        _, corpo = _http(urllib.request.Request(f'{API}/videos?{q}', headers={'Authorization': f'Bearer {token}'}))
+        out.update({v['id']: v['snippet'] for v in json.loads(corpo).get('items', [])})
+    return out
+
+
+def atualizar_textos(video_id, titulo, descricao, config_dir):
+    """Troca título e/ou descrição mantendo categoria, tags e idioma que o vídeo já tem (título vazio = mantém)."""
+    s = snippets([video_id], config_dir).get(video_id)
+    if not s:
+        raise Falha(f'vídeo {video_id} não encontrado no canal logado', DEFINITIVO)
+    novo = {k: s[k] for k in ('title', 'description', 'categoryId', 'tags', 'defaultLanguage', 'defaultAudioLanguage') if k in s}
+    if titulo:
+        novo['title'] = titulo[:100]
+    novo['description'] = descricao[:5000]
+    token = _token(config_dir)
+    _http(urllib.request.Request(f'{API}/videos?part=snippet', data=json.dumps({'id': video_id, 'snippet': novo}).encode(),
+                                 method='PUT', headers={'Authorization': f'Bearer {token}', 'Content-Type': 'application/json'}))
+
+
 def listar_lives(origem_id, config_dir, maximo=20):
     chave = creds.api_key(config_dir)
     if not chave:

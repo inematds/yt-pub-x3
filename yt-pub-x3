@@ -171,6 +171,24 @@ def cmd_login(a):
         print(f"{n:8} {'próprio' if login.proprio(c) else 'antigo '} {login.testar(con, c)}")
 
 
+def cmd_enriquecer(a):
+    """Sem --aplicar só lista (lê o YouTube, não muda nada). Com --aplicar precisa de X3_PUBLICAR=1."""
+    from lib import config, enriquecer
+    c = canal(a.canal)
+    if a.max:
+        c['enriquecer']['max_por_vez'] = a.max
+    con = db.connect()
+    for l, m in enriquecer.candidatos(con, c):
+        tem = 'com transcrição' if enriquecer.transcricao(c, l['video_id']) else 'sem transcrição (espera o corte)'
+        print(f"{l['video_id']} {l['data_live']} {m:9} {tem} · {l['titulo'][:60]}")
+    if not a.aplicar:
+        print('nada foi alterado; use --aplicar com X3_PUBLICAR=1')
+        return
+    if not config.publicar_de_verdade():
+        sys.exit('--aplicar exige X3_PUBLICAR=1')
+    print(enriquecer.executar(con, c, False))
+
+
 ap = argparse.ArgumentParser(prog='yt-pub-x3')
 sub = ap.add_subparsers(dest='cmd', required=True)
 p = sub.add_parser('enviar', help='põe uma pasta na fila')
@@ -220,5 +238,10 @@ p = sub.add_parser('login', help='login próprio do YouTube: copiar das pastas a
 p.add_argument('acao', choices=('copiar', 'testar'))
 p.add_argument('canal', nargs='?')
 p.set_defaults(f=cmd_login)
+p = sub.add_parser('enriquecer', help='título, descrição e capa das lives com título genérico')
+p.add_argument('canal')
+p.add_argument('--max', type=int, default=0)
+p.add_argument('--aplicar', action='store_true')
+p.set_defaults(f=cmd_enriquecer)
 a = ap.parse_args()
 a.f(a)
