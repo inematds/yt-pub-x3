@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS vigia_leituras (
 CREATE INDEX IF NOT EXISTS idx_vigia_leituras ON vigia_leituras(canal, destino, etapa);
 """
 
-PADRAO = {'limite_yt': 20, 'espera_yt': 120, 'limite_rs': 20, 'espera_rs': 24, 'seguidos': 2, 'auto_pausa': False}
+PADRAO = {'limite_yt': 20, 'espera_yt': 120, 'limite_rs': 20, 'espera_rs': 24, 'seguidos': 2, 'auto_pausa': False, 'so_shorts': True}
 FAIXAS = {'limite_yt': (0, 100000), 'espera_yt': (15, 1440), 'limite_rs': (0, 100000), 'espera_rs': (12, 72), 'seguidos': (1, 10)}
 DESISTE_H = 96          # post que não deu para ler em 4 dias sai da conferência
 INTERVALO_MIN = 15      # o hub agenda uma conferência por canal a cada 15 min
@@ -75,7 +75,7 @@ def salvar_cfg(con, canal, novo):
     for k, v in (novo or {}).items():
         if k not in PADRAO:
             raise ValueError(f'campo desconhecido: {k}')
-        if k == 'auto_pausa':
+        if k in ('auto_pausa', 'so_shorts'):
             atual[k] = bool(v)
             continue
         n = int(v)
@@ -182,7 +182,7 @@ LEITORES = {'youtube': None, 'rs': None}   # None = leitores reais acima
 
 # ---------- conferência ----------
 
-def _candidatos(con, canal, destino, espera_min, etapa):
+def _candidatos(con, canal, destino, espera_min, etapa, so_shorts=False):
     e = estado(con, canal, destino)
     if not e['ligado'] or not e['ligado_em']:
         return []
@@ -191,6 +191,7 @@ def _candidatos(con, canal, destino, espera_min, etapa):
     sql = f"""SELECT e.id entrega_id, e.ref, e.concluido_em, i.titulo FROM entregas e JOIN itens i ON i.id=e.item_id
         WHERE e.canal=? AND e.destino=? AND e.status='feito' AND e.ref!='' AND e.concluido_em>=? AND e.concluido_em<=? AND e.concluido_em>=?
         {"AND i.privacy='public'" if destino == 'youtube' else "AND i.tipo='video'"}
+        {"AND i.largura>0 AND i.largura<i.altura AND i.duracao<=180" if so_shorts else ''}
         AND NOT EXISTS (SELECT 1 FROM vigia_leituras l WHERE l.entrega_id=e.id AND l.etapa=?) ORDER BY e.concluido_em"""
     return [dict(r) for r in con.execute(sql, (canal, destino, e['ligado_em'], limite, velho, etapa))]
 
@@ -218,7 +219,7 @@ def conferir(con, canal, avisar=print, log=print):
         if not estado(con, nome, destino)['ligado'] or (destino == 'rs' and not canal['rs'].get('provedor')):
             continue
         if destino == 'youtube':
-            cand = _candidatos(con, nome, 'youtube', c['espera_yt'], 'verifica')
+            cand = _candidatos(con, nome, 'youtube', c['espera_yt'], 'verifica', c['so_shorts'])  # Nei 20/11: por ora só Shorts travam; a leitura de 24 h segue em tudo
             dia = _candidatos(con, nome, 'youtube', 24 * 60, 'dia')
             todos = {x['ref']: x for x in cand + dia}
             leitor = LEITORES['youtube'] or ler_youtube

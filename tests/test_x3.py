@@ -1123,10 +1123,21 @@ class AlertaShadowban(Base):
     def test_ignora_post_de_antes_de_ligar_e_recente(self):
         velho = self.publicar(horas_atras=20)
         self.ligar(horas_atras=5)
-        novo = self.publicar(horas_atras=0.2)  # ainda dentro da espera de 60 min
+        novo = self.publicar(horas_atras=0.2)  # ainda dentro da espera de 120 min
         self.views.update({velho: 0, novo: 0})
         self.conferir()
         self.assertEqual(self.lidas, [])
+
+    def test_so_shorts_ignora_video_deitado_na_verificacao(self):
+        self.ligar()
+        ref = self.publicar(3)
+        self.con.execute("UPDATE itens SET largura=1920, altura=1080, duracao=600 WHERE id=(SELECT item_id FROM entregas WHERE ref=?)", (ref,))
+        self.views[ref] = 0
+        self.conferir()
+        self.assertFalse(self.con.execute("SELECT 1 FROM vigia_leituras WHERE etapa='verifica'").fetchone())
+        vigia.salvar_cfg(self.con, 'lives3', {'so_shorts': False})
+        self.conferir()
+        self.assertTrue(self.con.execute("SELECT 1 FROM vigia_leituras WHERE etapa='verifica'").fetchone())
 
     def test_trava_com_dois_seguidos_e_so_pausa_se_pedido(self):
         self.ligar()

@@ -115,7 +115,7 @@ entrada/lives4/2026-11-18-enxame/
 ### Alerta de shadowban
 
 Desativado em todo canal. Ativo, confere só o que foi publicado depois de ativar:
-- **YouTube:** lê as views pela YouTube Data API (`videos.list`, 1 unidade por até 50 vídeos) depois de `espera_yt` minutos (padrão 120, desde 20/11/2026: com 60 min até o lives1 travava) e de novo com 24 h, para a análise.
+- **YouTube:** lê as views pela YouTube Data API (`videos.list`, 1 unidade por até 50 vídeos) depois de `espera_yt` minutos (padrão 120, desde 20/11/2026: com 60 min até o lives1 travava) e de novo com 24 h, para a análise. Por ora só o Short (em pé, até 180 s) entra na verificação que trava (`so_shorts: true`, Nei 20/11/2026: no Aventuras o Short entrega e o corte não); a leitura de 24 h continua em tudo.
 - **RS:** não faz leitura nova; usa a foto diária do Metricool gravada pelo `verdade-das-redes` depois de `espera_rs` horas (padrão 24). Hoje cobre as marcas inema.tds, eventosextremos e FTD.
 - Abaixo do limite (padrão 20 views) = aviso. `seguidos` posts baixos (padrão 2) = **Travado**. A pausa automática começa desligada.
 - A aba mostra mediana, quantos posts dariam alerta com o limite atual e cada leitura, para calibrar o limite de cada canal.
