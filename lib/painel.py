@@ -194,6 +194,38 @@ def _contagem_clipes(con, nome):
     return r
 
 
+def catalogo():
+    """Sync diário que leva clipes e lives para o catálogo do site (lê os bancos antigos e o x3.db)."""
+    out = {'em': '', 'clips': 0, 'lives': 0, 'ok': False, 'msg': ''}
+    base = config.catalogo_dir()
+    try:
+        with open(os.path.join(base, 'version.json'), encoding='utf-8') as f:
+            v = json.load(f)
+        out.update(em=v.get('lives_synced_at', ''), clips=v.get('lives_total_clips', 0), lives=v.get('lives_total_lives', 0))
+    except (OSError, ValueError) as e:
+        out['msg'] = f'version.json ilegível: {e}'
+        return out
+    try:
+        with open(os.path.join(base, 'logs', 'sync.log'), 'rb') as f:
+            f.seek(0, 2)
+            f.seek(max(0, f.tell() - 4000))
+            cauda = f.read().decode('utf-8', 'replace')
+    except OSError:
+        cauda = ''
+    try:
+        atraso = (datetime.now() - datetime.fromisoformat(out['em'])).total_seconds() / 3600
+    except (TypeError, ValueError):
+        atraso = 99
+    bloco = cauda.rsplit('SYNC SEMANAL', 1)[-1]
+    if atraso > 26:
+        out['msg'] = f'sem sync há {int(atraso)} h'
+    elif 'Traceback' in bloco or 'Push concluido' not in bloco:
+        out['msg'] = 'última rodada sem "Push concluido" no log'
+    else:
+        out['ok'] = True
+    return out
+
+
 def estado(con, canais):
     lg = legado(canais)
     out = []
@@ -218,7 +250,7 @@ def estado(con, canais):
                     'vagas': s, 'semana': sem, 'recibos': lg['recibos'].get(c['rs']['blog_id'], 0), 'vigia': vigia.resumo(con, n),
                     'login': {**login.estado(con, n), 'proprio': login.proprio(c)}, 'capa': db.capa_permissao(con, n)})
     return {'versao': VERSION, 'publicando': config.publicar_de_verdade(), 'agora': db.agora(), 'dias': lg['dias'], 'dias_serie': dias_serie, 'canais': out,
-            'recusados': [dict(r) for r in con.execute('SELECT * FROM recusados ORDER BY id DESC LIMIT 30')]}
+            'recusados': [dict(r) for r in con.execute('SELECT * FROM recusados ORDER BY id DESC LIMIT 30')], 'catalogo': catalogo()}
 
 
 def salvar_horarios(con, nome, secao, horarios):

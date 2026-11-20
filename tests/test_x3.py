@@ -34,7 +34,7 @@ class Base(unittest.TestCase):
         self.addCleanup(shutil.rmtree, self.t, True)
         amb = {'X3_DB': f'{self.t}/d/x3.db', 'X3_ENTRADA': f'{self.t}/entrada', 'X3_CANAIS': f'{self.t}/canais', 'X3_ACERVO': f'{self.t}/acervo',
                'X3_RECUSADOS': f'{self.t}/rec', 'X3_HISTORICO_YTPUBX': f'{self.t}/hist.jsonl', 'X3_LEGADO': f'{self.t}/legado', 'X3_PUBLICAR': '1',
-               'X3_LOGIN_DIR': f'{self.t}/login'}
+               'X3_LOGIN_DIR': f'{self.t}/login', 'X3_CATALOGO': f'{self.t}/catalogo'}
         p = mock.patch.dict(os.environ, amb)
         p.start()
         self.addCleanup(p.stop)
@@ -620,6 +620,27 @@ class Painel(Base):
 
     def test_escuta_so_local(self):
         self.assertEqual(self.s.server_address[0], '127.0.0.1')
+
+    def test_catalogo_do_site(self):
+        base = os.environ['X3_CATALOGO']
+        self.assertIn('ilegível', painel.catalogo()['msg'])
+        os.makedirs(f'{base}/logs')
+        agora = datetime.now().isoformat(timespec='seconds')
+        with open(f'{base}/version.json', 'w') as f:
+            json.dump({'lives_synced_at': agora, 'lives_total_clips': 5, 'lives_total_lives': 2}, f)
+        with open(f'{base}/logs/sync.log', 'w') as f:
+            f.write('SYNC SEMANAL — x\nPush concluido.\n')
+        k = painel.catalogo()
+        self.assertTrue(k['ok'])
+        self.assertEqual((k['clips'], k['lives']), (5, 2))
+        with open(f'{base}/logs/sync.log', 'a') as f:
+            f.write('SYNC SEMANAL — y\nTraceback (most recent call last)\n')
+        self.assertFalse(painel.catalogo()['ok'])
+        with open(f'{base}/version.json', 'w') as f:
+            json.dump({'lives_synced_at': 'lixo'}, f)
+        self.assertIn('sem sync', painel.catalogo()['msg'])
+        c, b = self.req('/api/estado')
+        self.assertEqual(c, 200)
 
     def test_estado_e_acao(self):
         self.pasta(); self.varrer()

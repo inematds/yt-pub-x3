@@ -68,6 +68,7 @@ python3 dashboard/server.py 8230               # http://127.0.0.1:8230
 | 10 | Acompanhar, pausar, pular ou reenviar | `http://127.0.0.1:8230` | 🧠 Nei |
 | 11 | Alerta de shadowban: ativar por canal e destino, ver as leituras e destravar | painel do canal → linha **Alerta de shadowban** e aba de mesmo nome | 🧠 Nei · ⚙️ hub |
 | 12 | Login próprio do YouTube: copiar uma vez, teste de 6 em 6 h, autenticar de novo quando vencer | `./yt-pub-x3 login copiar` · painel do canal → linha **Login do YouTube** (Testar / Autenticar) | ⚙️ script · ⚙️ hub · 🧠 Nei |
+| 13 | Conferir se o catálogo do site leu o que o x3 publicou (o sync lê o `x3.db` só para leitura) | tela geral do painel → linha **Catálogo do site** | ⚙️ script · 🧠 Nei |
 
 ## O que colocar na pasta
 

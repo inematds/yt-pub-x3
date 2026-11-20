@@ -43,6 +43,11 @@ def legado_dir():
     return _p('X3_LEGADO', PROJETOS)
 
 
+def catalogo_dir():
+    """Projeto que monta o catálogo de clipes e lives do site (version.json + logs/sync.log)."""
+    return _p('X3_CATALOGO', os.path.join(PROJETOS, 'inemabuscas'))
+
+
 def publicar_de_verdade():
     """Simulação é o padrão: só X3_PUBLICAR=1 publica, baixa ou gasta IA."""
     return os.environ.get('X3_PUBLICAR') == '1'
