@@ -17,6 +17,8 @@ RS = {'provedor': '', 'ligado': False, 'marca': '', 'blog_id': '', 'redes': [], 
 CLIPES = {'horarios': []}
 CORTES = {'ligado': False, 'horarios': [], 'max_por_dia': 1, 'ai_modo': 'claude-api'}
 ENRIQUECER = {'ligado': False, 'horarios': [], 'max_por_vez': 3, 'prompt': ''}
+# Cota do YouTube vira à meia-noite do Pacífico (04:00/05:00 de Brasília): sobe às 03:30 com a cota que sobrou do dia.
+CAPAS_CLIPES = {'ligado': False, 'gerar': '02:30', 'subir': '03:30', 'ultimos': 10}
 
 
 def _lista(v):
@@ -37,6 +39,7 @@ def normaliza(nome, bruto):
     c['cortes']['horarios'] = _lista(c['cortes']['horarios'])
     c['enriquecer'] = {**ENRIQUECER, **(bruto.get('enriquecer') or {})}
     c['enriquecer']['horarios'] = _lista(c['enriquecer']['horarios'])
+    c['capas_clipes'] = {**CAPAS_CLIPES, **(bruto.get('capas_clipes') or {})}
     c['rs']['redes'] = _lista(c['rs']['redes'])
     c['rs_herda'] = c['rs']['horarios'] is None  # sem lista própria, o RS acompanha os horários de imports
     c['rs']['horarios'] = c['youtube']['horarios'] if c['rs_herda'] else _lista(c['rs']['horarios'])

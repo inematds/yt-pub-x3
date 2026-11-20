@@ -36,7 +36,7 @@ def _slots(con, nome, tipo, horarios, payload, prefixo):
 def _limpar_slots(con, nome, prefixo, horarios):
     """Horário desligado no painel não pode continuar agendado."""
     marcas = ','.join('?' * len(horarios))
-    con.execute(f"""DELETE FROM jobs WHERE canal=? AND status='pendente' AND tipo IN ('publicar','cortar','enriquecer')
+    con.execute(f"""DELETE FROM jobs WHERE canal=? AND status='pendente' AND tipo IN ('publicar','cortar','enriquecer','capas_gerar','capas_subir')
         AND chave LIKE ? AND substr(chave,-5) NOT IN ({marcas})""", (nome, f'{prefixo}:{nome}:%', *horarios))
 
 
@@ -60,6 +60,12 @@ def agendar(con, canais, simular=False):
             _slots(con, nome, 'cortar', c['cortes']['horarios'], {}, 'corte')
         if c['enriquecer']['ligado'] and c['enriquecer']['horarios']:
             _slots(con, nome, 'enriquecer', c['enriquecer']['horarios'], {}, 'enriq')
+        cc = c['capas_clipes']
+        _limpar_slots(con, nome, 'capg', [cc['gerar']] if cc['ligado'] else [])
+        _limpar_slots(con, nome, 'caps', [cc['subir']] if cc['ligado'] else [])
+        if cc['ligado']:
+            _slots(con, nome, 'capas_gerar', [cc['gerar']], {}, 'capg')
+            _slots(con, nome, 'capas_subir', [cc['subir']], {}, 'caps')
         bloco = agora.hour // login.INTERVALO_H
         db.add_job(con, nome, 'login', db.agora(), chave=f'login:{nome}:{agora:%Y-%m-%d}:{bloco}')
         if any(vigia.estado(con, nome, d)['ligado'] for d in ('youtube', 'rs')):

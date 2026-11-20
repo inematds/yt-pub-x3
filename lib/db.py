@@ -40,6 +40,9 @@ CREATE TABLE IF NOT EXISTS capa_canal (
 CREATE TABLE IF NOT EXISTS enriquecidas (
   canal TEXT NOT NULL, video_id TEXT NOT NULL, modo TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT '',
   titulo TEXT NOT NULL DEFAULT '', erro TEXT NOT NULL DEFAULT '', em TEXT NOT NULL DEFAULT '', PRIMARY KEY(canal, video_id));
+CREATE TABLE IF NOT EXISTS capas_clipes (
+  canal TEXT NOT NULL, video_id TEXT NOT NULL, item_id INTEGER, status TEXT NOT NULL DEFAULT '', capa TEXT NOT NULL DEFAULT '',
+  msg TEXT NOT NULL DEFAULT '', em TEXT NOT NULL DEFAULT '', PRIMARY KEY(canal, video_id));
 """
 
 ACOES = {

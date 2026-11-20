@@ -21,7 +21,7 @@ sys.path.insert(0, RAIZ)
 sys.path.insert(0, os.path.join(RAIZ, 'dashboard'))
 import hub  # noqa: E402
 import server  # noqa: E402
-from lib import canais, cortes, creds, db, enriquecer, entrada, importar, login, metricool, midia, migrar, painel, runner, vigia, youtube  # noqa: E402
+from lib import canais, capas_clipes, cortes, creds, db, enriquecer, entrada, importar, login, metricool, midia, migrar, painel, runner, vigia, youtube  # noqa: E402
 from lib.falhas import AMBIGUO, AUTH, COTA, DEFINITIVO, TEMPORARIO, Falha  # noqa: E402
 
 VERT = (1080, 1920, 55.0)
@@ -442,6 +442,65 @@ class Enriquecer(Base):
         self.canal(enriquecer={'ligado': False, 'horarios': [self.hm]})
         hub.agendar(self.con, canais.carregar())
         self.assertEqual(self.con.execute("SELECT COUNT(*) FROM jobs WHERE tipo='enriquecer' AND status='pendente'").fetchone()[0], 0)
+
+
+class CapasClipes(Base):
+    """Capas dos últimos clipes, só com YouTube e Codex falsos."""
+
+    def setUp(self):
+        super().setUp()
+        self.canal(capas_clipes={'ligado': True, 'gerar': self.hm, 'subir': self.hm, 'ultimos': 3})
+        d = f'{self.t}/legado/yt-pub-lives3/data'
+        os.makedirs(d)
+        v = sqlite3.connect(f'{d}/lives.db')
+        v.execute("CREATE TABLE publicados (id INTEGER PRIMARY KEY, clip_video_id TEXT, live_video_id TEXT)")
+        for vid, live in [('V1', 'L'), ('V2', 'L'), ('V3', 'import_x'), ('erro_upload', 'L'), ('V4', 'L')]:
+            v.execute('INSERT INTO publicados(clip_video_id, live_video_id) VALUES(?,?)', (vid, live))
+        v.commit(); v.close()
+        self.marca = {'V4': 'liso', 'V2': 'ia', 'V1': 'liso'}
+        self.subidas = []
+
+    def gerar(self, falha=None):
+        def capa(n, t, d, pasta):
+            if falha:
+                raise RuntimeError(falha)
+            return f'{pasta}.jpg'
+        return capas_clipes.gerar(self.con, self.c(), False, lambda *a: None, lambda n: self.marca,
+                                  lambda ids, cfg: {i: {'title': i, 'description': ''} for i in ids}, capa)
+
+    def subir(self, falha=None):
+        def definir(v, f, cfg):
+            if falha:
+                raise RuntimeError(falha)
+            self.subidas.append(v)
+        return capas_clipes.subir(self.con, self.c(), False, lambda *a: None, definir)
+
+    def test_so_os_de_capa_lisa_e_nao_refaz(self):
+        self.assertEqual([v for v, _ in capas_clipes.candidatos(self.con, self.c(), lambda n: self.marca)], ['V4', 'V1'])
+        self.assertIn('2 de 2', self.gerar())
+        self.assertEqual(self.subidas, [])  # gerar não gasta cota
+        self.assertEqual(self.subir(), '2 capa(s) trocada(s)')
+        self.assertEqual(sorted(self.subidas), ['V1', 'V4'])
+        self.assertEqual(self.gerar(), 'nada a trocar')
+
+    def test_cota_acabou_fica_para_amanha(self):
+        self.gerar()
+        self.assertIn('cota acabou', self.subir('HTTP 403: quotaExceeded'))
+        self.assertEqual(self.con.execute("SELECT COUNT(*) FROM capas_clipes WHERE status='gerada'").fetchone()[0], 2)
+
+    def test_canal_sem_permissao(self):
+        self.gerar()
+        self.assertIn('sem permissão', self.subir('HTTP 403: The user does not have permissions to upload and set custom thumbnails'))
+        self.assertEqual(db.capa_permissao(self.con, 'lives3'), 'nao')
+        self.assertEqual(self.gerar(), 'canal sem permissão de capa')
+
+    def test_hub_agenda_e_desligado_nao_roda(self):
+        hub.agendar(self.con, canais.carregar())
+        tipos = {r[0] for r in self.con.execute("SELECT tipo FROM jobs WHERE tipo LIKE 'capas_%'")}
+        self.assertEqual(tipos, {'capas_gerar', 'capas_subir'})
+        self.canal(capas_clipes={'ligado': False})
+        job = self.con.execute("SELECT * FROM jobs WHERE tipo='capas_gerar'").fetchone()
+        self.assertEqual(runner.executar(self.con, job, canais.carregar(), False), 'capas dos clipes desligadas')
 
 
 class Revisao(Base):

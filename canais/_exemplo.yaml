@@ -30,3 +30,8 @@ enriquecer:              # lives com título genérico: título, descrição e c
   horarios: ["02:00", "04:00"]
   max_por_vez: 3
   prompt: ''             # vazio = config/prompt_enrich.txt do agendador antigo do canal
+capas_clipes:            # troca a capa dos últimos clipes que saíram sem capa do Codex
+  ligado: false
+  gerar: '02:30'          # só Codex, não gasta cota
+  subir: '03:30'          # antes da virada da cota (meia-noite do Pacífico)
+  ultimos: 10
