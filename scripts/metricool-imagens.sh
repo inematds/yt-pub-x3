@@ -28,12 +28,12 @@ QUANDO=$(date -u -d "@$ALVO" +%Y-%m-%dT%H:%M:00)
 
 gh release view social -R "$REPO" >/dev/null 2>&1 || \
   gh release create social -R "$REPO" --title "Vídeos para redes sociais" --notes "Cópias usadas pelo Metricool." >/dev/null
-MEDIA=""; n=0
+MEDIA=""; ARGS_MEDIA=(); n=0
 for f in "$@"; do
   n=$((n + 1)); e="${f##*.}"; nome="$(printf '%s-%02d.%s' "$HASH" "$n" "$e")"; cp "$f" "$T/$nome"
   gh release upload social "$T/$nome" -R "$REPO" --clobber || { echo "falhou o envio da imagem"; exit 1; }
   u=$(python3 "$M/auto/resolver_midia.py" "https://github.com/$REPO/releases/download/social/$nome") || exit 1
-  MEDIA="$MEDIA\"$u\","
+  MEDIA="$MEDIA\"$u\","; ARGS_MEDIA+=(--media "$u")
 done
 MEDIA="${MEDIA%,}"
 
@@ -46,8 +46,13 @@ PEDIDO="Use só as ferramentas do servidor MCP metricool-inematds.
    instagramData = {type: \"POST\", isAiGenerated: true}
    tiktokData = {privacyOption: \"PUBLIC_TO_EVERYONE\", title: primeira linha do texto (até 90 caracteres), autoAddMusic: true, photoCoverIndex: 0}
 3) Responda APENAS uma linha JSON, sem crase: {\"ok\":true|false,\"redes\":[...],\"faltam\":[...],\"planner\":[...],\"erro\":\"\"}"
+if [ -n "${METRITDS_LLM:-}" ]; then   # caminho antigo pelo agente, só se pedir
 OUT=$(printf '%s' "$PEDIDO" | timeout 900 python3 "$M/auto/ia_motor.py" executar metricool_publicacao --pasta "$M/estado" --agente --arquivo "$TXT" \
   --ferramentas "mcp__metricool-inematds__getBrandSettings mcp__metricool-inematds__getScheduledPosts mcp__metricool-inematds__createScheduledPost Read" 2>&1)
+else   # padrão desde 25/11/2026: direto no MCP do Metricool, sem LLM (Nei)
+OUT=$(timeout 600 python3 "$M/auto/metricool_direto.py" agendar --tipo imagens --marca "$MARCA" --redes "$REDES" \
+  --quando-utc "$QUANDO" "${ARGS_MEDIA[@]}" --texto "$TXT" 2>&1)
+fi
 J=$(printf '%s' "$OUT" | grep -o '{.*"ok".*}' | tail -1)
 printf '%s' "$J" | python3 -c 'import json,sys; sys.exit(0 if json.load(sys.stdin).get("ok") is True else 1)' 2>/dev/null \
   || { echo "Metricool não agendou: $(printf '%s' "$OUT" | tail -c 300)"; exit 1; }
