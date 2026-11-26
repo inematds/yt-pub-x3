@@ -1,7 +1,7 @@
 """Capas dos últimos clipes: troca, todo dia, a capa dos clipes que saíram sem capa do Codex.
 
 Gera de madrugada (só Codex, sem cota) e sobe pouco antes da virada da cota do YouTube (meia-noite do Pacífico =
-04:00/05:00 de Brasília), gastando a cota que sobrou do dia. Clipe com capa já trocada não é refeito.
+04:00/05:00 de Brasília), gastando a cota que sobrou do dia. Clipe com capa já trocada não é refeito; capa que falhou fica na dívida e vai primeiro no dia seguinte.
 Fontes: itens do x3 com capa pendente e clipes do agendador antigo cuja capa caiu no fundo liso (log do systemd).
 """
 import os
@@ -12,6 +12,7 @@ import subprocess
 from . import config, db, ia, youtube
 
 RECUSA_CAPA = 'permissions to upload and set custom'
+SUMIU = 'vídeo não encontrado no canal'
 
 
 def _log_antigo(nome):
@@ -56,8 +57,13 @@ def candidatos(con, canal, log_antigo=None):
     depois (com `retroativo`) os clipes antigos do mais novo para o mais velho, até todos terem capa do Codex."""
     cc = canal['capas_clipes']
     nome, ultimos, por_dia = canal['nome'], int(cc['ultimos']), int(cc['por_dia'])
-    feitos = {r[0] for r in con.execute("SELECT video_id FROM capas_clipes WHERE canal=? AND status IN ('gerada','aplicada','erro')", (nome,))}
-    out = []
+    # Erro de geração (Codex fora) não encerra: fica na dívida e vai primeiro no dia seguinte (Nei, 26/11/2026:
+    # "se não puder fica na dívida até fazer no outro dia"). Só o vídeo que sumiu do canal sai de vez.
+    feitos = {r[0] for r in con.execute("SELECT video_id FROM capas_clipes WHERE canal=? AND (status IN ('gerada','aplicada') "
+                                        "OR (status='erro' AND msg=?))", (nome, SUMIU))}
+    out = [(r[0], r[1]) for r in con.execute("SELECT video_id, item_id FROM capas_clipes WHERE canal=? AND status='erro' AND msg!=? "
+                                             "ORDER BY em", (nome, SUMIU))]
+    feitos |= {v for v, _ in out}
     for r in con.execute("""SELECT e.ref, i.id FROM entregas e JOIN itens i ON i.id=e.item_id WHERE i.canal=? AND e.destino='youtube'
                             AND e.status='feito' AND e.ref!='' AND i.tipo IN ('clip','video') AND i.capa_status='pendente'
                             ORDER BY e.concluido_em DESC LIMIT ?""", (nome, ultimos)):
@@ -95,7 +101,7 @@ def gerar(con, canal, simular, log=print, log_antigo=None, ler=None, capa=None):
     for vid, item_id in cands:
         s = snip.get(vid)
         if not s:
-            _gravar(con, nome, vid, item_id, 'erro', msg='vídeo não encontrado no canal')
+            _gravar(con, nome, vid, item_id, 'erro', msg=SUMIU)
             continue
         pasta = os.path.join(config.acervo_dir(), nome, f'capa-{vid}')
         try:

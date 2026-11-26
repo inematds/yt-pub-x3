@@ -311,6 +311,23 @@ class Capa(Base):
             runner.fazer_capa(self.con, self.c(), 1, False, lambda m: None)
         self.assertEqual(gera.call_count, 1)  # na segunda vez nem chama o Codex
 
+    def test_sem_permissao_vence_e_recupera_capa_pronta(self):
+        self._pub()
+        recusa = Falha('HTTP 403: The authenticated user doesn\'t have permissions to upload and set custom video thumbnails.', DEFINITIVO)
+        with mock.patch.object(runner, 'definir_capa', side_effect=recusa):
+            self.con.execute("UPDATE itens SET capa='c.jpg', capa_status='pronta' WHERE id=1")
+            runner.fazer_capa(self.con, self.c(), 1, False, lambda m: None)
+        self.assertEqual(db.item(self.con, 1)['capa_status'], 'nao_leva')
+        self.con.execute("UPDATE capa_canal SET em='2000-01-01 00:00:00'")  # o 'nao' venceu
+        self.assertEqual(db.capa_permissao(self.con, 'lives3'), '')
+        self.dims['g.mp4'] = DEIT
+        self.pasta(arquivos=['g.mp4']); self.varrer(); self.rodar('youtube')
+        with mock.patch.object(runner, 'gerar_capa', return_value='g.jpg'), mock.patch.object(runner, 'definir_capa'):
+            r = runner.fazer_capa(self.con, self.c(), 2, False, lambda m: None)
+        self.assertIn('1 capa(s) que ficaram de fora', r)
+        self.assertEqual(db.item(self.con, 1)['capa_status'], 'pronta')
+        self.assertEqual(self.con.execute("SELECT COUNT(*) FROM jobs WHERE chave='capa:1:recuperar'").fetchone()[0], 1)
+
     def _gerador(self, cria):
         s = f'{self.t}/thumbviral.py'
         with open(s, 'w') as f:
@@ -525,6 +542,15 @@ class CapasClipes(Base):
         self.assertEqual(c(), ['V1'])
         self.gerar(); self.subir()
         self.assertEqual(c(), [])
+
+    def test_codex_falhou_fica_na_divida_e_vai_primeiro(self):
+        self.assertIn('0 de 2', self.gerar(falha='codex fora'))
+        c = lambda: [v for v, _ in capas_clipes.candidatos(self.con, self.c(), lambda n: self.marca)]
+        self.assertEqual(sorted(c()), ['V1', 'V4'])  # não sumiram: são dívida
+        self.assertIn('2 de 2', self.gerar())
+        self.assertEqual(c(), [])
+        capas_clipes._gravar(self.con, 'lives3', 'V9', None, 'erro', msg=capas_clipes.SUMIU)
+        self.assertNotIn('V9', c())  # vídeo que sumiu do canal sai de vez
 
     def test_cota_acabou_fica_para_amanha(self):
         self.gerar()

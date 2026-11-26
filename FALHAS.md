@@ -2,6 +2,7 @@
 
 | data | o que quebrou | menor correção | prompt \| infra |
 |---|---|---|---|
+| 26/11/2026 | Vídeo do lives10 (GOPda1uBHgU) saiu com um quadro do vídeo no lugar da capa pronta: o canal ficou marcado "sem permissão de capa" desde 20/11 pelo histórico antigo e nunca foi reconferido; 10 capas de clipes de 25/11 (Codex fora) foram gravadas como erro e esquecidas | "sem permissão" vence em 7 dias e as capas prontas que ficaram de fora voltam para a fila; erro de geração de capa de clipe vira dívida e vai primeiro | prompt |
 | 26/11/2026 | 4 lives do lives1 (20, 21 e 25/11) ficaram com título "INEMA" ou sem capa: sem legenda do YouTube o corte dava erro e o enriquecimento pulava calado ("nada a enriquecer"); a capa que tomou 429 em 21/11 foi gravada como feita | Whisper do inemavox quando falta legenda, status `retentar` no corte, capa recusada vira `capa_pendente` e é reenviada (usando a capa já gerada), resultado diz quantas lives esperam transcrição | infra + prompt |
 | 22/11/2026 | Nove logins renovados no painel antigo continuavam vencidos no x3, que usa cópias próprias | Validar o ID do canal e importar o token renovado para a cópia do x3 com backup | infra |
 | 20/11/2026 | Cortes do lives1 pararam em 17/11: o agendador antigo seguiu cortando (4 lives, 39 clipes) mas não publica mais, e o x3, com cortes desligados e lendo `clips_pendentes=0`, não pegou os clipes | `cortes.ligado: true` no lives1; job `cortar` absorve clipes órfãos do antigo (live cortada desde 17/11 sem clipe publicado) via `migrar.selecionar(orfaos_desde=...)` | infra |

@@ -127,7 +127,11 @@ def fazer_capa(con, canal, item_id, simular, log=print):
         capa = it['capa'] or gerar_capa(canal['nome'], it['titulo'], it['descricao'], it['pasta'])
         definir_capa(e['ref'], capa, canal['config_dir'])
         con.execute("UPDATE itens SET capa=?, capa_status='aplicada', capa_motivo='' WHERE id=?", (capa, item_id))
+        antes = db.capa_permissao(con, canal['nome'])
         db.definir_capa_permissao(con, canal['nome'], 'sim')
+        if antes != 'sim':
+            n = recuperar_capas(con, canal['nome'])
+            return f'capa aplicada; canal aceita capa, {n} capa(s) que ficaram de fora voltaram para a fila' if n else 'capa aplicada'
         return 'capa aplicada'
     except Exception as x:
         if RECUSA_CAPA in str(x):
@@ -138,6 +142,19 @@ def fazer_capa(con, canal, item_id, simular, log=print):
         con.execute("UPDATE itens SET capa_status='pendente', capa_motivo=? WHERE id=?", (str(x)[:300], item_id))
         avisar(f"{canal['nome']}: vídeo publicado sem capa ({it['titulo'][:50]}).", log)
         return 'capa pendente'
+
+
+def recuperar_capas(con, nome, dias=30, maximo=5):
+    """Canal voltou a aceitar capa: vídeos recentes que ficaram sem ela, mas já têm a capa pronta, ganham o job de capa.
+    No máximo 5 por vez (o YouTube limita as trocas de capa por canal)."""
+    limite = (datetime.now() - timedelta(days=dias)).strftime('%Y-%m-%d %H:%M:%S')
+    rows = con.execute("""SELECT i.id FROM itens i JOIN entregas e ON e.item_id=i.id AND e.destino='youtube' AND e.status='feito'
+                          WHERE i.canal=? AND i.capa_motivo=? AND i.capa!='' AND e.concluido_em>=?
+                          ORDER BY e.concluido_em DESC LIMIT ?""", (nome, SEM_CAPA, limite, maximo)).fetchall()
+    for r in rows:
+        con.execute("UPDATE itens SET capa_status='pronta', capa_motivo='' WHERE id=?", (r['id'],))
+        db.add_job(con, nome, 'capa', db.agora(), json.dumps({'item_id': r['id']}), f"capa:{r['id']}:recuperar")
+    return len(rows)
 
 
 def faixa(job):

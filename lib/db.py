@@ -1,7 +1,7 @@
 """Banco único. Um item é a publicação; cada destino dele é uma entrega independente."""
 import os
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from . import config
 
@@ -154,10 +154,18 @@ def pausar_destino(con, canal, destino, motivo, retomar_em):
                 (motivo[:300], retomar_em, canal, destino))
 
 
+NAO_VALE_DIAS = 7
+
+
 def capa_permissao(con, canal):
     """'sim', 'nao' ou '' (ainda não se sabe se o YouTube aceita capa personalizada no canal)."""
-    r = con.execute('SELECT permissao FROM capa_canal WHERE canal=?', (canal,)).fetchone()
-    return r['permissao'] if r else ''
+    r = con.execute('SELECT permissao, em FROM capa_canal WHERE canal=?', (canal,)).fetchone()
+    if not r:
+        return ''
+    # 'nao' vence em 7 dias: o canal pode ganhar o recurso (lives10 estava 'nao' desde 20/11 e aceitou capa em 26/11)
+    if r['permissao'] == 'nao' and (r['em'] or '') < (datetime.now() - timedelta(days=NAO_VALE_DIAS)).strftime('%Y-%m-%d %H:%M:%S'):
+        return ''
+    return r['permissao']
 
 
 def definir_capa_permissao(con, canal, permissao, msg=''):
