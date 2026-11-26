@@ -102,8 +102,29 @@ else
   mv "$JOB_DIR/${VIDEO_ID}.pt.json3" "$JOB_DIR/transcript_raw.json3" 2>/dev/null || true
 fi
 
+# Sem legenda no YouTube: Whisper local do inemavox (pipeline já aprovado). Sem isso a live
+# ficava em erro e nunca ganhava título, descrição e capa (Nei, 26/11/2026).
+INEMAVOX="${INEMAVOX_DIR:-$HOME/projetos/inemavox}"
+if [[ ! -f "$JOB_DIR/transcript_raw.json3" && -x "$INEMAVOX/venv/bin/python" && -f "$INEMAVOX/transcrever_v1.py" ]]; then
+  echo "    Sem legenda no YouTube, transcrevendo com o Whisper do inemavox..."
+  WDIR="$JOB_DIR/whisper/transcription"
+  mkdir -p "$WDIR"
+  if (cd "$INEMAVOX" && venv/bin/python transcrever_v1.py --in "https://www.youtube.com/watch?v=$VIDEO_ID" \
+        --outdir "$WDIR" --whisper-model large-v3 --src pt); then
+    python3 - "$WDIR/transcript.json" "$JOB_DIR/transcript_raw.json3" << 'PYEOF'
+import json, sys
+segs = json.load(open(sys.argv[1], encoding='utf-8'))
+ev = [{'tStartMs': int(s['start'] * 1000), 'dDurationMs': int((s['end'] - s['start']) * 1000),
+       'segs': [{'utf8': s['text'].strip()}]} for s in segs if s.get('text', '').strip()]
+if ev:
+    json.dump({'events': ev, 'fonte': 'whisper-inemavox'}, open(sys.argv[2], 'w', encoding='utf-8'), ensure_ascii=False)
+PYEOF
+  fi
+  rm -rf "$JOB_DIR/whisper"
+fi
+
 if [[ ! -f "$JOB_DIR/transcript_raw.json3" ]]; then
-  echo "Erro: não foi possível baixar a transcrição" >&2
+  echo "Erro: não foi possível baixar a transcrição (nem legenda do YouTube nem Whisper)" >&2
   exit 1
 fi
 

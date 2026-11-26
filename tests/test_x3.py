@@ -372,6 +372,15 @@ class Cortes(Base):
         cortes.cortar_proxima(self.con, self.c(), ruim)
         self.assertEqual(self.con.execute('SELECT status FROM lives').fetchone()[0], 'erro')
 
+    def test_retentar_ignora_erro_do_antigo(self):
+        os.makedirs(f'{self.t}/legado/yt-pub-lives3/data')
+        v = sqlite3.connect(f'{self.t}/legado/yt-pub-lives3/data/lives.db')
+        v.execute('CREATE TABLE lives(video_id,titulo,data_live,status_cortes,qtd_clips)')
+        v.execute("INSERT INTO lives VALUES('L1','t','2026-01-01','erro',0)")
+        v.commit(); v.close()
+        self.con.execute("INSERT INTO lives(canal,video_id,data_live,status) VALUES('lives3','L1','2026-01-01','retentar')")
+        self.assertIn('L1: cortada', cortes.cortar_proxima(self.con, self.c(), self._cortar))
+
 
 class Enriquecer(Base):
     """Enriquecimento das lives, só com YouTube e IA falsos."""
@@ -410,7 +419,8 @@ class Enriquecer(Base):
     def test_simulacao_nao_muda_nada(self):
         r = self.rodar(simular=True)
         self.assertIn('A (tudo)', r)
-        self.assertNotIn('D', r)  # sem transcrição: espera o corte
+        self.assertNotIn('D (tudo)', r)  # sem transcrição: espera o corte
+        self.assertIn('esperando transcrição: D', r)
         self.assertEqual((self.feito, self.capas), ([], []))
 
     def test_enriquece_e_nao_refaz(self):
@@ -420,15 +430,39 @@ class Enriquecer(Base):
         self.assertTrue(all(p.startswith('PROMPT DO CANAL') for p in self.pedidos))
         self.assertLess(max(len(p) for p in self.pedidos), enriquecer.LIMITE_TRANSCRICAO + 2000)
         self.feito.clear()
-        self.assertEqual(self.rodar(), 'nada a enriquecer')
+        self.assertEqual(self.rodar(), '1 live(s) esperando transcrição: D')  # D sem transcrição aparece no resultado
         self.assertEqual(self.feito, [])
+        self.snip['D'] = {'title': 'Live boa', 'description': 'tem'}
+        self.assertEqual(self.rodar(), 'nada a enriquecer')
 
     def test_capa_falhando_nao_desfaz_texto(self):
         r = self.rodar(falha_capa=True)
         self.assertIn('capa falhou', r)
         self.assertEqual(len(self.feito), 2)
         st = self.con.execute("SELECT status FROM enriquecidas WHERE video_id='A'").fetchone()[0]
-        self.assertEqual(st, 'feito')
+        self.assertEqual(st, 'capa_pendente')
+
+    def test_capa_pendente_e_reenviada_sem_refazer_texto(self):
+        def sobe_429(v, f, cfg):
+            raise RuntimeError('HTTP 429: The user has uploaded too many thumbnails recently')
+        self.rodar()  # A e B feitos
+        enriquecer._registrar(self.con, 'lives3', 'A', 'tudo', 'capa_pendente', 'INEMA', 'texto ok, capa falhou: 429')
+        pasta = f"{self.t}/acervo/lives3/live-A/capa-x3"
+        os.makedirs(pasta, exist_ok=True)
+        open(f'{pasta}/capa.jpg', 'w').write('jpg')
+        self.snip['A'] = {'title': 'LIVE: Novo', 'description': 'Desc'}
+        self.feito.clear()
+        r = enriquecer.reenviar_capas(self.con, self.c(), lambda ids, cfg: {i: self.snip[i] for i in ids},
+                                      lambda *a: self.fail('não deve gerar de novo'), sobe_429, lambda *a: None)
+        self.assertIn('ainda pendente', r[0])
+        self.assertEqual(self.con.execute("SELECT status FROM enriquecidas WHERE video_id='A'").fetchone()[0], 'capa_pendente')
+        enviados = []
+        r = enriquecer.reenviar_capas(self.con, self.c(), lambda ids, cfg: {i: self.snip[i] for i in ids},
+                                      lambda *a: self.fail('não deve gerar de novo'),
+                                      lambda v, f, cfg: enviados.append((v, f)), lambda *a: None)
+        self.assertEqual(enviados, [('A', f'{pasta}/capa.jpg')])
+        self.assertEqual(self.con.execute("SELECT status FROM enriquecidas WHERE video_id='A'").fetchone()[0], 'feito')
+        self.assertEqual(self.feito, [])  # texto não foi refeito
 
     def test_desligado_nao_roda(self):
         self.canal(enriquecer={'ligado': False})

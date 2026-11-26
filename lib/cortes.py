@@ -107,7 +107,12 @@ def cortar_proxima(con, canal, cortar=None, log=print):
     if feitas >= int(canal['cortes']['max_por_dia']):
         return 'limite do dia'
     l = None
-    for c in con.execute("SELECT * FROM lives WHERE canal=? AND status='pendente' ORDER BY data_live, video_id", (nome,)).fetchall():
+    # 'retentar' = live que deu erro e foi mandada cortar de novo (ex.: sem legenda, agora com Whisper); o antigo não manda nela
+    for c in con.execute("SELECT * FROM lives WHERE canal=? AND status IN ('pendente','retentar') "
+                         "ORDER BY status='pendente', data_live, video_id", (nome,)).fetchall():
+        if c['status'] == 'retentar':
+            l = c
+            break
         antigo = status_antigo(canal, c['video_id'])
         if antigo in ('', 'pendente'):
             l = c

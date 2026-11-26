@@ -2,6 +2,8 @@
 
 Usa a transcrição que o corte já deixou em <lives_dir>/<video_id>/condensed.txt. Sem transcrição, a live espera o corte.
 Nunca refaz: o que deu certo fica na tabela `enriquecidas`; o título que já não é genérico no YouTube também conta como feito.
+Capa que não subiu (429, Codex fora) fica `capa_pendente` e é reenviada nas rodadas seguintes, sem refazer o texto
+(26/11/2026: a a-Ka7urkoPg tomou 429 em 21/11, foi marcada feita e ficou sem capa).
 """
 import os
 
@@ -34,7 +36,17 @@ def transcricao(canal, video_id):
 
 
 def ja_feitas(con, nome):
-    return {r[0] for r in con.execute("SELECT video_id FROM enriquecidas WHERE canal=? AND status='feito'", (nome,))}
+    return {r[0] for r in con.execute("SELECT video_id FROM enriquecidas WHERE canal=? AND status IN ('feito','capa_pendente')", (nome,))}
+
+
+def capa_pronta(canal, vid):
+    """Capa já gerada numa rodada anterior (não gasta o Codex de novo)."""
+    jpg = os.path.join(config.acervo_dir(), canal['nome'], f'live-{vid}', 'capa-x3', 'capa.jpg')
+    return jpg if os.path.isfile(jpg) else ''
+
+
+def _limite_capas(e):
+    return '429' in str(e) or 'too many thumbnails' in str(e).lower()
 
 
 def candidatos(con, canal, listar=None, ler=None):
@@ -82,33 +94,71 @@ def _uma(con, canal, live, modo, prompt, escrever, capa, atualizar, definir_capa
     atualizar(vid, titulo, descricao, canal['config_dir'])
     if modo == 'tudo':
         try:
-            pasta = os.path.join(config.acervo_dir(), canal['nome'], f'live-{vid}')
-            definir_capa(vid, capa(canal['nome'], titulo, descricao, pasta), canal['config_dir'])
-        except Exception as e:  # texto já subiu: a capa falhar não desfaz o resto
+            _subir_capa(canal, vid, titulo, descricao, capa, definir_capa)
+        except Exception as e:  # texto já subiu: a capa falhar não desfaz o resto, e ela é reenviada depois
             log(f'enriquecer {vid}: capa falhou: {e}')
             return f'texto ok, capa falhou: {str(e)[:120]}'
     return 'ok'
 
 
+def _subir_capa(canal, vid, titulo, descricao, capa, definir_capa):
+    jpg = capa_pronta(canal, vid) or capa(canal['nome'], titulo, descricao,
+                                          os.path.join(config.acervo_dir(), canal['nome'], f'live-{vid}'))
+    definir_capa(vid, jpg, canal['config_dir'])
+
+
+def reenviar_capas(con, canal, ler, capa, definir_capa, log):
+    """Lives com texto feito e capa pendente: usa a capa já gerada (ou gera) e sobe. Para no primeiro 429."""
+    pend = [r[0] for r in con.execute("SELECT video_id FROM enriquecidas WHERE canal=? AND status='capa_pendente' ORDER BY em",
+                                      (canal['nome'],))]
+    if not pend:
+        return []
+    snip = ler(pend, canal['config_dir'])
+    out = []
+    for vid in pend:
+        s = snip.get(vid)
+        if not s:
+            _registrar(con, canal['nome'], vid, 'tudo', 'erro', '', 'vídeo não encontrado no canal')
+            out.append(f'{vid} capa: vídeo sumiu')
+            continue
+        try:
+            _subir_capa(canal, vid, s.get('title', ''), s.get('description', ''), capa, definir_capa)
+            _registrar(con, canal['nome'], vid, 'tudo', 'feito', s.get('title', ''), '')
+            out.append(f'{vid} capa reenviada')
+        except Exception as e:
+            log(f'enriquecer {vid}: capa ainda falhou: {e}')
+            con.execute("UPDATE enriquecidas SET erro=?, em=? WHERE canal=? AND video_id=?",
+                        (f'capa falhou: {str(e)[:200]}', db.agora(), canal['nome'], vid))
+            out.append(f'{vid} capa ainda pendente: {str(e)[:80]}')
+            if _limite_capas(e):
+                break  # o canal está no limite de troca de capas: tenta na próxima rodada
+    return out
+
+
 def executar(con, canal, simular, log=print, listar=None, ler=None, escrever=None, capa=None, atualizar=None, definir_capa=None):
     """Enriquece até `max_por_vez` lives. Em simulação só lista o que faria."""
-    cands = candidatos(con, canal, listar, ler)
-    cands = [(l, m) for l, m in cands if transcricao(canal, l['video_id'])]
+    ler = ler or youtube.snippets
+    todos = candidatos(con, canal, listar, ler)
+    cands = [(l, m) for l, m in todos if transcricao(canal, l['video_id'])]
+    esperando = [l['video_id'] for l, m in todos if (l, m) not in cands]
+    aviso = f"{len(esperando)} live(s) esperando transcrição: {', '.join(esperando)}" if esperando else ''
     limite = int(canal['enriquecer']['max_por_vez'])
     if simular:
-        return 'simulado: ' + (', '.join(f"{l['video_id']} ({m})" for l, m in cands[:limite]) or 'nada a enriquecer')
+        r = ', '.join(f"{l['video_id']} ({m})" for l, m in cands[:limite]) or 'nada a enriquecer'
+        return 'simulado: ' + '; '.join(x for x in (r, aviso) if x)
+    feitos = reenviar_capas(con, canal, ler, capa or ia.gerar_capa, definir_capa or youtube.definir_capa, log)
     prompt = prompt_do_canal(canal)
     if not prompt:
-        return 'sem prompt de enriquecimento'
-    feitos = []
+        return '; '.join(feitos + ['sem prompt de enriquecimento'])
     for live, modo in cands[:limite]:
         vid = live['video_id']
         try:
             r = _uma(con, canal, live, modo, prompt, escrever or ia.enriquecer_live, capa or ia.gerar_capa,
                      atualizar or youtube.atualizar_textos, definir_capa or youtube.definir_capa, log)
-            _registrar(con, canal['nome'], vid, modo, 'feito', live.get('titulo', ''), '' if r == 'ok' else r)
+            st = 'capa_pendente' if r.startswith('texto ok, capa falhou') else 'feito'
+            _registrar(con, canal['nome'], vid, modo, st, live.get('titulo', ''), '' if r == 'ok' else r)
         except Exception as e:
             r = f'erro: {str(e)[:150]}'
             _registrar(con, canal['nome'], vid, modo, 'erro', live.get('titulo', ''), str(e))
         feitos.append(f'{vid} {r}')
-    return '; '.join(feitos) or 'nada a enriquecer'
+    return '; '.join(feitos + ([aviso] if aviso else [])) or 'nada a enriquecer'
