@@ -67,7 +67,8 @@ class Painel(BaseHTTPRequestHandler):
                 self._json(200, geracao.ler(canais))
             elif caminho == '/api/estado':
                 self._json(200, painel.estado(con, canais))
-            elif caminho == '/api/login/retorno':
+            elif caminho in ('/api/login/retorno', '/api/auth/callback'):
+                # /api/auth/callback é o único retorno registrado nos clientes OAuth (localhost:8090).
                 # Volta do Google. Nada do código aparece na página nem em log.
                 if q.get('error'):
                     ok, msg = False, f"o Google respondeu: {q['error'][:80]}"
@@ -165,6 +166,11 @@ class PainelRede(Painel):
     """Mesmo painel para a rede local: exige origem numa rede permitida e senha."""
     senha = ''
     redes = ()
+    local_sem_senha = False  # quem está no próprio servidor (loopback + Host localhost) entra como no painel local
+
+    def _local(self):
+        host = (self.headers.get('Host') or '').rsplit(':', 1)[0].lower()
+        return self.local_sem_senha and self.client_address[0] in ('127.0.0.1', '::1') and host in ('127.0.0.1', 'localhost')
 
     def _na_rede(self, texto):
         try:
@@ -176,6 +182,8 @@ class PainelRede(Painel):
     def _host_ok(self):
         host = (self.headers.get('Host') or '').rsplit(':', 1)[0].lower()
         nome = socket.gethostname().lower()
+        if self._local():
+            return True
         return self._na_rede(host) or host in (nome, f'{nome}.local')
 
     def _senha_ok(self):
@@ -190,6 +198,8 @@ class PainelRede(Painel):
         return hmac.compare_digest(senha, self.senha.encode()) and usuario_ok
 
     def _liberado(self):
+        if self._local():
+            return True
         if not self._na_rede(self.client_address[0]):
             self._json(403, {'erro': 'rede recusada'})
             return False
@@ -221,24 +231,27 @@ def criar(porta):
     return ThreadingHTTPServer(('127.0.0.1', porta), Painel)
 
 
-def criar_rede(porta, senha, redes, endereco='0.0.0.0'):
+def criar_rede(porta, senha, redes, endereco='0.0.0.0', local_sem_senha=False):
     if len(senha or '') < SENHA_MINIMA:
         raise ValueError(f'X3_PAINEL_SENHA precisa de pelo menos {SENHA_MINIMA} caracteres')
-    tratador = type('PainelRedeConfig', (PainelRede,), {'senha': senha, 'redes': ler_redes(redes)})
+    tratador = type('PainelRedeConfig', (PainelRede,), {'senha': senha, 'redes': ler_redes(redes),
+                                                        'local_sem_senha': local_sem_senha})
     return ThreadingHTTPServer((endereco, porta), tratador)
 
 
 if __name__ == '__main__':
     args = [a for a in sys.argv[1:] if a != '--rede']
     if '--rede' in sys.argv:
-        porta = int(args[0]) if args else 8231
+        # Porta única 8090 (Nei, 27/11/2026): é o retorno do Google, então o painel do servidor (localhost) entra sem senha.
+        porta = int(args[0]) if args else 8090
         try:
-            srv = criar_rede(porta, os.environ.get('X3_PAINEL_SENHA'), os.environ.get('X3_PAINEL_REDES'))
+            srv = criar_rede(porta, os.environ.get('X3_PAINEL_SENHA'), os.environ.get('X3_PAINEL_REDES'),
+                             local_sem_senha=True)
         except ValueError as e:
             sys.exit(f'painel de rede não iniciado: {e}')
         print(f'painel na rede local, porta {porta}, com senha', flush=True)
     else:
-        porta = int(args[0]) if args else 8230
+        porta = int(args[0]) if args else 8090
         srv = criar(porta)
         print(f'painel em http://127.0.0.1:{porta}', flush=True)
     srv.serve_forever()

@@ -1,11 +1,11 @@
 [Unit]
-Description=yt-pub-x3: painel na rede local, com senha, porta 8231
+Description=yt-pub-x3: painel único na porta 8090 (rede local com senha; no próprio servidor sem senha; retorno do login do Google)
 
 [Service]
 WorkingDirectory=%h/projetos/yt-pub-x3
 # X3_PAINEL_SENHA e X3_PAINEL_REDES ficam fora do repositório.
 EnvironmentFile=%h/.config/yt-pub-x3/painel-rede.env
-ExecStart=/usr/bin/python3 %h/projetos/yt-pub-x3/dashboard/server.py 8231 --rede
+ExecStart=/usr/bin/python3 %h/projetos/yt-pub-x3/dashboard/server.py 8090 --rede
 Restart=on-failure
 RestartSec=10
 

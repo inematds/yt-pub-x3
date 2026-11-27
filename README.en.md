@@ -39,7 +39,7 @@ pip install -r requirements.txt
 python3 -m unittest tests/test_x3.py
 cp canais/_exemplo.yaml canais/meucanal.yaml   # adjust the channel details
 python3 hub.py --once                          # simulation
-python3 dashboard/server.py 8230               # http://127.0.0.1:8230
+python3 dashboard/server.py 8090               # http://127.0.0.1:8090
 ```
 
 `config_dir` stores the YouTube login: `.env` with `CLIENT_ID`, `CLIENT_SECRET` and `API_KEY`, `credentials.enc` and `.encryption_key`. To create it: `GWS_CONFIG_DIR=<config_dir> scripts/yt-auth`. `importar-canais` is only for people who already have `yt-pub-livesN` instances.
@@ -59,13 +59,13 @@ python3 dashboard/server.py 8230               # http://127.0.0.1:8230
 | 1 | Generate channels from the current systems, all disabled | `./yt-pub-x3 importar-canais` | ⚙️ script |
 | 2 | Import the livestream history for channels that make clips | `./yt-pub-x3 importar-lives lives1` | ⚙️ script |
 | 3 | Choose the pilot channel and set `ativo: true` in the YAML | edit `canais/livesN.yaml` | 🧠 session with Nei |
-| 4 | Start the hub and dashboard | `python3 hub.py` · `python3 dashboard/server.py 8230` | ⚙️ service |
+| 4 | Start the hub and dashboard | `python3 hub.py` · `python3 dashboard/server.py 8090 --rede` · `python3 avisos.py` | ⚙️ service |
 | 5 | Deliver content | folder in `entrada/<canal>/` or `./yt-pub-x3 enviar <pasta> --canal livesN` | ⚙️ producer |
 | 6 | Validate: format, duplicates, and text | automatic; `contexto` uses Codex | ⚙️ hub · 🤖 Codex |
 | 7 | Cut livestreams into clips for channels with clips enabled | automatic | ⚙️ hub · 🤖 AI in `scripts/ia.yaml` |
 | 8 | Publish 1 item per scheduled time, separately for each destination | automatic | ⚙️ hub |
 | 9 | Add a cover image with Codex when allowed | automatic | ⚙️ hub · 🤖 Codex |
-| 10 | Monitor, pause, skip, or resend | `http://127.0.0.1:8230` | 🧠 Nei |
+| 10 | Monitor, pause, skip, or resend | `http://127.0.0.1:8090` (rede: `http://<ip>:8090`, com senha) | 🧠 Nei |
 
 ## What to put in the folder
 
@@ -111,6 +111,6 @@ python3 -m unittest tests/test_x3.py
 
 ## Security
 
-The dashboard listens on `127.0.0.1`, has no default password or route that executes commands, and actions require a dedicated header. Local network access is optional: `dashboard/server.py 8231 --rede` (service `yt-pub-x3-painel-rede`) requires user `x3`, an `X3_PAINEL_SENHA` of at least 16 characters, and `X3_PAINEL_REDES` listing private networks only. The connection is unencrypted HTTP: use it only on a trusted network. Logins, `canais/*.yaml`, `data/` and `entrada/` stay out of git.
+A single process on port 8090 (also the Google login return): on the server itself (`localhost`) it opens without a password; it has no default password or route that executes commands, and actions require a dedicated header. Local network access: `dashboard/server.py 8090 --rede` (service `yt-pub-x3-painel-rede`) requires user `x3`, an `X3_PAINEL_SENHA` of at least 16 characters, and `X3_PAINEL_REDES` listing private networks only. The connection is unencrypted HTTP: use it only on a trusted network. Logins, `canais/*.yaml`, `data/` and `entrada/` stay out of git.
 
 Connectors: Metricool for video and images. Blotato and Upload-Post do not have active connectors yet.

@@ -1050,6 +1050,19 @@ class PainelRede(Base):
         self.assertEqual(self.req(b + '/api/estado', cab={'Authorization': 'Basic %%%'}), 401)
         self.assertEqual(self.req(b + '/api/estado', cab=self.auth()), 200)
 
+    def test_local_sem_senha_so_no_proprio_servidor(self):
+        painel._cache.update(t=0, v={})
+        s = server.criar_rede(0, self.SENHA, '192.168.250.0/24', '127.0.0.1', local_sem_senha=True)
+        threading.Thread(target=s.serve_forever, daemon=True).start()
+        self.addCleanup(s.server_close)
+        self.addCleanup(s.shutdown)
+        b = f'http://127.0.0.1:{s.server_address[1]}'
+        self.assertEqual(self.req(b + '/api/estado'), 200)
+        self.assertEqual(self.req(b + '/api/estado', cab={'Host': 'site.mal'}), 403)
+        r = urllib.request.urlopen(b + '/api/auth/callback?state=errado&code=segredo123', timeout=5).read().decode()
+        self.assertIn('Login não renovado', r)
+        self.assertNotIn('segredo123', r)
+
     def test_recusa_origem_fora_da_rede(self):
         self.assertEqual(self.req(self.subir('192.168.250.0/24') + '/api/estado', cab=self.auth()), 403)
 
@@ -1496,6 +1509,47 @@ class TestGeracao(unittest.TestCase):
         r = geracao.ler({}, props={'clima-dia': dict(self.BASE), 'clima-mundo': dict(self.BASE)}, placar=geracao._placar(arq))
         self.assertEqual([f['timer'] for f in r['falhas']], ['clima-dia'])
         shutil.rmtree(d)
+
+
+class Notifier(unittest.TestCase):
+    """Avisos do Telegram migrados do painel antigo: Telegram sempre falso, tudo em pasta temporária."""
+
+    def setUp(self):
+        from lib import notifier
+        self.n = notifier
+        self.t = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.t)
+        inst = f'{self.t}/yt-pub-lives9'
+        os.makedirs(f'{inst}/data')
+        con = sqlite3.connect(f'{inst}/data/lives.db')
+        con.execute('CREATE TABLE config (chave TEXT PRIMARY KEY, valor TEXT)')
+        con.executemany('INSERT INTO config VALUES(?,?)', [('telegram_notify_enabled', 'true'),
+                                                            ('telegram_notify_chat_id', '-1')])
+        con.commit(); con.close()
+        for alvo, valor in (('STATE_FILE', f'{self.t}/estado.json'), ('_state', None)):
+            p = mock.patch.object(notifier, alvo, valor); p.start(); self.addCleanup(p.stop)
+        notifier.init([{'id': 9, 'name': 'yt-pub-lives9', 'path': inst}], lambda *_: None)
+        self.enviados = []
+        def falso(chat, texto, reply_markup=None):
+            self.enviados.append((chat, texto))
+            return {'ok': True, 'result': {'message_id': len(self.enviados)}}
+        for alvo, valor in (('send_message', falso), ('auto_video', lambda: False),
+                            ('_canal_label', lambda inst, cfg=None: 'lives9')):
+            p = mock.patch.object(notifier, alvo, valor); p.start(); self.addCleanup(p.stop)
+
+    def test_avisa_uma_vez_e_guarda_estado_fora_do_master(self):
+        agora = datetime.now().strftime('%Y-%m-%dT%H:%M')
+        rows = [{'canal': 'lives9', 'video_id': 'abc', 'url': 'https://youtu.be/abc', 'titulo': 'T', 'data': agora, 'origem': ''}]
+        self.n._notify_fonte('x3', rows, '2000-01-01T00:00', 'x3')
+        self.n._notify_fonte('x3', rows, '2000-01-01T00:00', 'x3')
+        self.assertEqual(len(self.enviados), 1)
+        self.assertEqual(self.enviados[0][0], '-1')
+        self.assertIn('abc', json.load(open(f'{self.t}/estado.json'))['x3']['notified'])
+
+    def test_estado_padrao_na_pasta_data_do_x3(self):
+        from lib import config
+        self.assertEqual(os.path.dirname(os.path.realpath(self.n.ROOT + '/data/notify_state.json')),
+                         os.path.dirname(os.path.realpath(config.db_path())))
 
 
 if __name__ == '__main__':

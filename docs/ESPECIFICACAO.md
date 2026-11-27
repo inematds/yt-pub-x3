@@ -62,7 +62,7 @@ Reaproveitar a lógica de `gerar_metadados` e `arte_codex`/`gerar_thumb` do `~/p
 
 ## Painel
 
-`dashboard/`, porta própria em 127.0.0.1, **sem senha padrão, sem rota de execução ou reinício**. Rede local (pedido do Nei, 18/11/2026): porta separada 8231 com `--rede`, senha gerada na instalação e só redes privadas listadas; a porta 8230 continua só em 127.0.0.1. Dados de x3 + leitura somente-leitura de `yt-pub-livesN/data/lives.db`, `historico.jsonl` do yt-pubx e recibos em `metricool-inematds/estado`. Ações por entrega: pausar, retomar, pular, reenviar; por canal: ligar/desligar cada destino. POST exige cabeçalho próprio.
+`dashboard/`, porta própria em 127.0.0.1, **sem senha padrão, sem rota de execução ou reinício**. Rede local (pedido do Nei, 18/11/2026): porta separada 8231 com `--rede`, senha gerada na instalação e só redes privadas listadas. Desde 27/11/2026 é uma porta só, a 8090 (retorno do login do Google): no próprio servidor, loopback com Host localhost, entra sem senha; pela rede, com senha. Os avisos no Telegram (notifier) saíram do painel antigo para `avisos.py` (serviço próprio, trava de processo único). Dados de x3 + leitura somente-leitura de `yt-pub-livesN/data/lives.db`, `historico.jsonl` do yt-pubx e recibos em `metricool-inematds/estado`. Ações por entrega: pausar, retomar, pular, reenviar; por canal: ligar/desligar cada destino. POST exige cabeçalho próprio.
 
 ## Testes = critério de pronto (só publicadores falsos e pastas temporárias)
 

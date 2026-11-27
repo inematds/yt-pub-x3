@@ -1,6 +1,6 @@
 """Distribuição de links (Telegram, bot @inemaytbot): quem recebe o quê.
 
-Quem envia é o notifier do master (yt-pub-livesx-master/master-dashboard/notifier.py).
+Quem envia é o notifier do x3 (lib/notifier.py, serviço yt-pub-x3-avisos; migrado do master em 27/11/2026).
 Ele lê, na tabela `config` do lives.db de cada canal, `telegram_notify_enabled` e
 `telegram_notify_chat_id`, e a partir de 20/11/2026 também o que o x3 publica.
 Este módulo só LÊ esses dados para o painel. Ele nunca envia nada.
@@ -13,7 +13,7 @@ import urllib.request
 from datetime import datetime, timedelta
 
 MASTER = os.path.expanduser('~/projetos/yt-pub-livesx-master')
-ESTADO = os.path.join(MASTER, 'master-dashboard', 'notify_state.json')
+ESTADO = os.environ.get('X3_NOTIFIER_ESTADO') or os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data', 'notify_state.json')
 ENV = os.path.join(MASTER, 'config', '.env')
 NOMES = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data', 'distribuicao-nomes.json')
 

@@ -39,7 +39,7 @@ pip install -r requirements.txt
 python3 -m unittest tests/test_x3.py
 cp canais/_exemplo.yaml canais/meucanal.yaml   # ajuste os dados do canal
 python3 hub.py --once                          # simulação
-python3 dashboard/server.py 8230               # http://127.0.0.1:8230
+python3 dashboard/server.py 8090               # http://127.0.0.1:8090
 ```
 
 `config_dir` guarda o login do YouTube: `.env` com `CLIENT_ID`, `CLIENT_SECRET` e `API_KEY`, `credentials.enc` e `.encryption_key`. Para criar: `GWS_CONFIG_DIR=<config_dir> scripts/yt-auth`. `importar-canais` só serve para quem já tem instâncias `yt-pub-livesN`. Depois de importar, `./yt-pub-x3 login copiar` dá a cada canal uma cópia própria em `~/.config/yt-pub-x3/youtube/<canal>/` (pastas 700, arquivos 600, fora do git) e aponta o `config_dir` para lá; a origem não é alterada.
@@ -59,19 +59,19 @@ python3 dashboard/server.py 8230               # http://127.0.0.1:8230
 | 1 | Gerar os canais a partir dos sistemas atuais, todos desligados | `./yt-pub-x3 importar-canais` | ⚙️ script |
 | 2 | Trazer o histórico de lives de quem corta | `./yt-pub-x3 importar-lives lives1` | ⚙️ script |
 | 3 | Escolher o canal do piloto e pôr `ativo: true` no YAML | editar `canais/livesN.yaml` | 🧠 sessão com o Nei |
-| 4 | Subir hub e painel | `python3 hub.py` · `python3 dashboard/server.py 8230` | ⚙️ serviço |
+| 4 | Subir hub e painel | `python3 hub.py` · `python3 dashboard/server.py 8090 --rede` · `python3 avisos.py` | ⚙️ serviço |
 | 5 | Entregar conteúdo | pasta em `entrada/<canal>/` ou `./yt-pub-x3 enviar <pasta> --canal livesN` | ⚙️ produtor |
 | 6 | Validar: formato, repetição e textos | automático; `contexto` usa o Codex | ⚙️ hub · 🤖 Codex |
 | 7 | Cortar lives em clipes, nos canais com cortes ligados | automático | ⚙️ hub · 🤖 IA de `scripts/ia.yaml` |
 | 8 | Publicar 1 item por horário, separado por destino | automático | ⚙️ hub |
 | 9 | Aplicar capa pelo Codex quando permitido | automático | ⚙️ hub · 🤖 Codex |
-| 10 | Acompanhar, pausar, pular ou reenviar | `http://127.0.0.1:8230` | 🧠 Nei |
+| 10 | Acompanhar, pausar, pular ou reenviar | `http://127.0.0.1:8090` (rede: `http://<ip>:8090`, com senha) | 🧠 Nei |
 | 11 | Alerta de shadowban: ativar por canal e destino, ver as leituras e destravar | painel do canal → linha **Alerta de shadowban** e aba de mesmo nome | 🧠 Nei · ⚙️ hub |
 | 12 | Login próprio do YouTube: copiar uma vez, teste de 6 em 6 h, autenticar de novo quando vencer | `./yt-pub-x3 login copiar` · painel do canal → linha **Login do YouTube** (Testar / Autenticar) | ⚙️ script · ⚙️ hub · 🧠 Nei |
 | 13 | Conferir se o catálogo do site leu o que o x3 publicou (o sync lê o `x3.db` só para leitura) | tela geral do painel → linha **Catálogo do site** | ⚙️ script · 🧠 Nei |
 | 14 | Enriquecer lives: título genérico ganha título, descrição e capa (Codex); live sem descrição ganha só a descrição. Capa recusada (429) fica `capa_pendente` e é reenviada na rodada seguinte; o resultado lista as lives esperando transcrição. Desligado por padrão (`enriquecer: {ligado: true, horarios: [...], max_por_vez: 3}` no YAML do canal) | `./yt-pub-x3 enriquecer <canal>` (prévia) · `X3_PUBLICAR=1 ./yt-pub-x3 enriquecer <canal> --aplicar` | ⚙️ hub · 🧠 Nei liga |
 | 15 | Capas dos últimos clipes: os que saíram sem capa do Codex ganham capa nova. Gera de madrugada e sobe antes da virada da cota do YouTube (meia-noite do Pacífico = 04:00/05:00 de Brasília). Até `por_dia` (10) por dia (o YouTube limita a troca de capas por canal: o 429 veio depois de 10); com `retroativo` o que sobra anda para trás no histórico até todos os clipes terem a thumb viral. Desligado por padrão (`capas_clipes: {ligado: true, gerar: '01:30', subir: '03:30', ultimos: 10, por_dia: 10, retroativo: true}`) | hub, sem comando | ⚙️ hub · 🧠 Nei liga |
-| 16 | Distribuição de links: cada vídeo publicado no YouTube vai, pelo bot @inemaytbot, para as pessoas cadastradas no canal (quem envia é o notifier do master; o x3 entra como fonte desde 20/11/2026). Ver quem recebe o quê | painel → botão **Distribuição** · ligar ou desligar e cadastrar: `telegram_notify_*` no `lives.db` do canal (cadastro por mensagem ao bot) | ⚙️ master · 🧠 Nei |
+| 16 | Distribuição de links: cada vídeo publicado no YouTube vai, pelo bot @inemaytbot, para as pessoas cadastradas no canal (quem envia é o notifier do x3, `avisos.py`, serviço `yt-pub-x3-avisos`, migrado do painel antigo em 27/11/2026; fontes: lives.db dos canais, histórico do yt-pubx e o x3). Ver quem recebe o quê | painel → botão **Distribuição** · ligar ou desligar e cadastrar: `telegram_notify_*` no `lives.db` do canal (cadastro por mensagem ao bot) | ⚙️ x3 avisos · 🧠 Nei |
 | 17 | Geração: todos os agendadores que FAZEM vídeo (clima, virais, gitbombando, imersão, vigias, r7ex/rtex/rtexjp, radar de oportunidades), a que horas cada um gera e para qual canal vai. Horários, próximo, último e resultado lidos ao vivo do systemd; o catálogo gerador → canal fica em `lib/geracao.py` | painel → botão **Geração** (faixa vermelha e ⚠ no botão quando a última rodada de um gerador falhou, lida do placar `~/.local/share/inema/rodadas.jsonl` com as retificações; grade por hora, por canal, filtros por canal e por gerador) · horário muda no `.timer` do projeto dono | ⚙️ systemd · 🧠 Nei |
 
 ## O que colocar na pasta
@@ -130,7 +130,7 @@ Na mesma aba, cada destino ganha um placar em % das views, não em views: compar
 ### Login do YouTube
 
 - **Teste:** de 6 em 6 h o hub renova o token de cada canal ativo (sem cota). Só uma recusa do Google (`invalid_grant`, `disabled_client`, `invalid_client`) marca **Vencido**; erro de rede mantém o estado. O aviso no v3 sai só quando muda (venceu ou voltou). `./yt-pub-x3 login testar [canal]` faz o mesmo no terminal.
-- **Autenticar:** o botão abre o Google com a conta do canal sugerida. O retorno registrado nos clientes OAuth é `http://localhost:8090/api/auth/callback`; desde 27/11/2026 o painel antigo não autentica mais e essa porta só repassa o retorno ao painel local do x3 (8230, mesmo banco), que conclui sozinho. Se o painel foi aberto de outro aparelho, `localhost` não abre: copie o endereço inteiro da barra e cole na caixa do painel (vale 15 min, uma vez). O x3 troca o código, confere se a conta é a do canal (`destino_id`, 1 unidade de cota) e só então grava o novo `credentials.enc` (o anterior fica em `.bak`). Conta errada não grava nada. Se a pausa do YouTube era de login, ela sai.
+- **Autenticar:** o botão abre o Google com a conta do canal sugerida. O retorno registrado nos clientes OAuth é `http://localhost:8090/api/auth/callback`; desde 27/11/2026 o próprio painel do x3 escuta na 8090 (o painel antigo foi desligado) e conclui sozinho. Se o painel foi aberto de outro aparelho, `localhost` não abre: copie o endereço inteiro da barra e cole na caixa do painel (vale 15 min, uma vez). O x3 troca o código, confere se a conta é a do canal (`destino_id`, 1 unidade de cota) e só então grava o novo `credentials.enc` (o anterior fica em `.bak`). Conta errada não grava nada. Se a pausa do YouTube era de login, ela sai.
 
 ## Testes
 
@@ -140,6 +140,6 @@ python3 -m unittest tests/test_x3.py
 
 ## Segurança
 
-O painel escuta em `127.0.0.1`, não tem senha padrão nem rota que execute comandos, e ações exigem um cabeçalho próprio. O acesso pela rede local é opcional: `dashboard/server.py 8231 --rede` (serviço `yt-pub-x3-painel-rede`) exige usuário `x3`, `X3_PAINEL_SENHA` com 16 caracteres ou mais e `X3_PAINEL_REDES` só com redes privadas. A conexão é HTTP, sem criptografia: use apenas em rede de confiança. Logins, `canais/*.yaml`, `data/` e `entrada/` ficam fora do git.
+Um processo só na porta 8090: no próprio servidor (`localhost`) entra sem senha, como o antigo painel local; não tem senha padrão nem rota que execute comandos, e ações exigem um cabeçalho próprio. O acesso pela rede local: `dashboard/server.py 8090 --rede` (serviço `yt-pub-x3-painel-rede`) exige usuário `x3`, `X3_PAINEL_SENHA` com 16 caracteres ou mais e `X3_PAINEL_REDES` só com redes privadas. A conexão é HTTP, sem criptografia: use apenas em rede de confiança. Logins, `canais/*.yaml`, `data/` e `entrada/` ficam fora do git.
 
 Conectores: Metricool para vídeo e imagem. Blotato e Upload-Post ainda não têm conector ativo.

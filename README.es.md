@@ -39,7 +39,7 @@ pip install -r requirements.txt
 python3 -m unittest tests/test_x3.py
 cp canais/_exemplo.yaml canais/meucanal.yaml   # ajuste os dados do canal
 python3 hub.py --once                          # simulação
-python3 dashboard/server.py 8230               # http://127.0.0.1:8230
+python3 dashboard/server.py 8090               # http://127.0.0.1:8090
 ```
 
 `config_dir` guarda el inicio de sesión de YouTube: `.env` con `CLIENT_ID`, `CLIENT_SECRET` y `API_KEY`, `credentials.enc` y `.encryption_key`. Para crearlo: `GWS_CONFIG_DIR=<config_dir> scripts/yt-auth`. `importar-canais` solo sirve para quienes ya tienen instancias `yt-pub-livesN`.
@@ -59,13 +59,13 @@ python3 dashboard/server.py 8230               # http://127.0.0.1:8230
 | 1 | Generar los canales a partir de los sistemas actuales, todos desactivados | `./yt-pub-x3 importar-canais` | ⚙️ script |
 | 2 | Importar el historial de transmisiones en vivo de quienes hacen recortes | `./yt-pub-x3 importar-lives lives1` | ⚙️ script |
 | 3 | Elegir el canal piloto y poner `ativo: true` en el YAML | editar `canais/livesN.yaml` | 🧠 sesión con Nei |
-| 4 | Iniciar el hub y el panel | `python3 hub.py` · `python3 dashboard/server.py 8230` | ⚙️ servicio |
+| 4 | Iniciar el hub y el panel | `python3 hub.py` · `python3 dashboard/server.py 8090 --rede` · `python3 avisos.py` | ⚙️ servicio |
 | 5 | Entregar contenido | carpeta en `entrada/<canal>/` o `./yt-pub-x3 enviar <pasta> --canal livesN` | ⚙️ productor |
 | 6 | Validar: formato, repetición y textos | automático; `contexto` usa Codex | ⚙️ hub · 🤖 Codex |
 | 7 | Recortar transmisiones en vivo para crear clips, en los canales con recortes activados | automático | ⚙️ hub · 🤖 IA de `scripts/ia.yaml` |
 | 8 | Publicar 1 elemento por horario, por separado para cada destino | automático | ⚙️ hub |
 | 9 | Aplicar la portada con Codex cuando esté permitido | automático | ⚙️ hub · 🤖 Codex |
-| 10 | Revisar, pausar, omitir o volver a enviar | `http://127.0.0.1:8230` | 🧠 Nei |
+| 10 | Revisar, pausar, omitir o volver a enviar | `http://127.0.0.1:8090` (rede: `http://<ip>:8090`, com senha) | 🧠 Nei |
 
 ## Qué colocar en la carpeta
 
@@ -111,6 +111,6 @@ python3 -m unittest tests/test_x3.py
 
 ## Seguridad
 
-El panel escucha en `127.0.0.1`, no tiene una contraseña predeterminada ni una ruta para ejecutar comandos, y las acciones requieren un encabezado propio. El acceso por la red local es opcional: `dashboard/server.py 8231 --rede` (servicio `yt-pub-x3-painel-rede`) exige el usuario `x3`, una `X3_PAINEL_SENHA` de al menos 16 caracteres y `X3_PAINEL_REDES` solo con redes privadas. La conexión es HTTP sin cifrar: úsala solo en una red de confianza. Los inicios de sesión, `canais/*.yaml`, `data/` y `entrada/` quedan fuera de git.
+Un solo proceso en el puerto 8090 (también el retorno del login de Google): en el propio servidor (`localhost`) entra sin contraseña; no tiene una contraseña predeterminada ni una ruta para ejecutar comandos, y las acciones requieren un encabezado propio. El acceso por la red local: `dashboard/server.py 8090 --rede` (servicio `yt-pub-x3-painel-rede`) exige el usuario `x3`, una `X3_PAINEL_SENHA` de al menos 16 caracteres y `X3_PAINEL_REDES` solo con redes privadas. La conexión es HTTP sin cifrar: úsala solo en una red de confianza. Los inicios de sesión, `canais/*.yaml`, `data/` y `entrada/` quedan fuera de git.
 
 Conectores: Metricool para video e imágenes. Blotato y Upload-Post todavía no tienen un conector activo.

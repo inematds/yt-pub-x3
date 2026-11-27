@@ -1,6 +1,7 @@
 [Unit]
 Description=yt-pub-x3: painel local em 127.0.0.1:8230
 
+# Desligado em 27/11/2026: o painel único na 8090 (yt-pub-x3-painel-rede) atende também o servidor.
 [Service]
 WorkingDirectory=%h/projetos/yt-pub-x3
 ExecStart=/usr/bin/python3 %h/projetos/yt-pub-x3/dashboard/server.py 8230
