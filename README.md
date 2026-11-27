@@ -130,7 +130,7 @@ Na mesma aba, cada destino ganha um placar em % das views, não em views: compar
 ### Login do YouTube
 
 - **Teste:** de 6 em 6 h o hub renova o token de cada canal ativo (sem cota). Só uma recusa do Google (`invalid_grant`, `disabled_client`, `invalid_client`) marca **Vencido**; erro de rede mantém o estado. O aviso no v3 sai só quando muda (venceu ou voltou). `./yt-pub-x3 login testar [canal]` faz o mesmo no terminal.
-- **Autenticar:** o botão abre o Google com a conta do canal sugerida. O retorno registrado nos clientes OAuth é `http://localhost:8090/api/auth/callback`; o x3 não escuta nessa porta, então a página de retorno dá erro ou fica vazia: copie o endereço inteiro da barra e cole na caixa do painel (vale 15 min, uma vez). O x3 troca o código, confere se a conta é a do canal (`destino_id`, 1 unidade de cota) e só então grava o novo `credentials.enc` (o anterior fica em `.bak`). Conta errada não grava nada. Se a pausa do YouTube era de login, ela sai.
+- **Autenticar:** o botão abre o Google com a conta do canal sugerida. O retorno registrado nos clientes OAuth é `http://localhost:8090/api/auth/callback`; desde 27/11/2026 o painel antigo não autentica mais e essa porta só repassa o retorno ao painel local do x3 (8230, mesmo banco), que conclui sozinho. Se o painel foi aberto de outro aparelho, `localhost` não abre: copie o endereço inteiro da barra e cole na caixa do painel (vale 15 min, uma vez). O x3 troca o código, confere se a conta é a do canal (`destino_id`, 1 unidade de cota) e só então grava o novo `credentials.enc` (o anterior fica em `.bak`). Conta errada não grava nada. Se a pausa do YouTube era de login, ela sai.
 
 ## Testes
 

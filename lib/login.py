@@ -20,7 +20,8 @@ from . import canais as canais_mod, config, creds, db
 ARQUIVOS = ('.env', 'credentials.enc', '.encryption_key')
 EXTRAS = ('prompt_cortes.txt',)  # os cortes leem esse arquivo do config_dir
 # Único retorno registrado nos 17 clientes OAuth (16 são do tipo "web"; conferido em 20/11/2026). É a porta do painel
-# antigo: ele não reconhece o nonce do x3 e não usa o código, então o Nei cola no x3 o endereço que ficou na barra.
+# antigo, que desde 27/11/2026 não autentica mais: só repassa o retorno para o painel local do x3 (8230, mesmo banco).
+# De outro aparelho, localhost não abre: o Nei cola no x3 o endereço que ficou na barra.
 REDIRECT = 'http://localhost:8090/api/auth/callback'
 ESCOPOS = 'https://www.googleapis.com/auth/youtube https://www.googleapis.com/auth/youtube.upload'
 AUTH_URL = 'https://accounts.google.com/o/oauth2/auth'

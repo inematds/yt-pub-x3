@@ -2,6 +2,7 @@
 
 | data | o que quebrou | menor correção | prompt \| infra |
 |---|---|---|---|
+| 27/11/2026 | login pelo painel 8231 não concluía: o Google volta só para localhost:8090 e o painel antigo quebrava com o state do x3 (int(state)) | 8090 só repassa /api/auth/callback para o x3 local (8230); login do painel antigo desligado | infra |
 | 26/11/2026 | login do lives26 (Aventuras) vencido desde 08:00 (invalid_grant), nada publicado no dia; fila preservada | refazer o login do canal (Nei) | infra |
 | 26/11/2026 | Vídeo do lives10 (GOPda1uBHgU) saiu com um quadro do vídeo no lugar da capa pronta: o canal ficou marcado "sem permissão de capa" desde 20/11 pelo histórico antigo e nunca foi reconferido; 10 capas de clipes de 25/11 (Codex fora) foram gravadas como erro e esquecidas | "sem permissão" vence em 7 dias e as capas prontas que ficaram de fora voltam para a fila; erro de geração de capa de clipe vira dívida e vai primeiro | prompt |
 | 26/11/2026 | 4 lives do lives1 (20, 21 e 25/11) ficaram com título "INEMA" ou sem capa: sem legenda do YouTube o corte dava erro e o enriquecimento pulava calado ("nada a enriquecer"); a capa que tomou 429 em 21/11 foi gravada como feita | Whisper do inemavox quando falta legenda, status `retentar` no corte, capa recusada vira `capa_pendente` e é reenviada (usando a capa já gerada), resultado diz quantas lives esperam transcrição | infra + prompt |
