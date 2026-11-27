@@ -1,5 +1,5 @@
 [Unit]
-Description=yt-pub-x3: avisos das publicações no Telegram (bot dedicado)
+Description=yt-pub-x3: avisos das publicações no Telegram (bot dedicado) e de agendador parado
 After=network-online.target
 
 [Service]
@@ -7,6 +7,8 @@ WorkingDirectory=%h/projetos/yt-pub-x3
 # TELEGRAM_NOTIFY_BOT_TOKEN continua no .env de onde já era lido; a lista de canais fica fora do git.
 EnvironmentFile=%h/projetos/yt-pub-livesx-master/config/.env
 Environment=PYTHONUNBUFFERED=1
+# Só libera o envio do aviso de agendador parado pelo bot v3 (runner.avisar); este serviço não publica nada.
+Environment=X3_PUBLICAR=1
 ExecStart=/usr/bin/python3 %h/projetos/yt-pub-x3/avisos.py
 Restart=on-failure
 RestartSec=30

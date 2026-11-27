@@ -1,2 +1,2 @@
 """yt-pub-x3: fila única por canal, publicada no YouTube e nas redes sociais."""
-VERSION = '0.18.4'
+VERSION = '0.19.4'

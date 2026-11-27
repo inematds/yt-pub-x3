@@ -1552,5 +1552,35 @@ class Notifier(unittest.TestCase):
                          os.path.dirname(os.path.realpath(config.db_path())))
 
 
+class Agendadores(unittest.TestCase):
+    def setUp(self):
+        from lib import agendadores
+        self.a = agendadores
+        self.t = tempfile.mkdtemp(); self.addCleanup(shutil.rmtree, self.t)
+        self.inst = [{'name': 'yt-pub-lives9', 'scheduler_svc': 'yt-scheduler9'},
+                     {'name': 'yt-pub-lives7', 'scheduler_svc': 'yt-scheduler7', 'monitorar': False}]
+        self.avisos = []
+
+    def rodar(self, estado, quando):
+        return self.a.verificar(self.inst, lambda m, log=None: self.avisos.append(m),
+                                ler=lambda s: {x: estado for x in s}, agora=quando,
+                                caminho=f'{self.t}/st.json', log=lambda *_: None)
+
+    def test_avisa_queda_confirmada_repete_e_volta(self):
+        t0 = datetime(2026, 11, 27, 1, 0)
+        self.assertEqual(self.rodar(('inactive', 'dead'), t0), [])  # 1a leitura: pode ser reinício
+        self.assertIn('PARADO', self.rodar(('failed', 'failed'), t0 + timedelta(minutes=5))[0])
+        self.assertEqual(self.rodar(('failed', 'failed'), t0 + timedelta(hours=1)), [])
+        self.assertEqual(len(self.rodar(('failed', 'failed'), t0 + timedelta(hours=7))), 1)
+        self.assertIn('voltou', self.rodar(('active', 'running'), t0 + timedelta(hours=8))[0])
+        self.assertEqual(self.rodar(('active', 'running'), t0 + timedelta(hours=9)), [])
+        self.assertTrue(all('lives9' in m for m in self.avisos))  # monitorar: false fica de fora
+
+    def test_reinicio_em_laco_conta_como_parado(self):
+        self.assertTrue(self.a.parado('activating', 'auto-restart'))
+        self.assertFalse(self.a.parado('activating', 'start'))
+        self.assertFalse(self.a.parado('active', 'running'))
+
+
 if __name__ == '__main__':
     unittest.main()
